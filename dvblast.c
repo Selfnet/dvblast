@@ -73,7 +73,7 @@ int i_fec = 999;
 int i_rolloff = 35;
 int i_satnum = 0;
 bool b_unicable = false;
-int i_unicable_version = 0;
+int i_unicable_vers = 0;
 int i_userband = 0;
 int i_userband_id = 0;
 int i_uncommitted = 0;
@@ -1133,14 +1133,14 @@ int main( int i_argc, char **pp_argv )
 
         case 1005: // unicable version
             i_unicable_vers = atoi(optarg);
-            if ( i_unicable_vers < 1 || i_unicable_version > 2 )
+            if ( i_unicable_vers < 1 || i_unicable_vers > 2 )
                 i_unicable_vers = 1;
             break;
         
         case 1006: // unicable band id
             i_userband_id = atoi(optarg);
-            if ( i_userband_id < 1 || i_unicable_id > 8 )
-                i_unicable_id = 1;
+            if ( i_userband_id < 1 || i_userband_id > 8 )
+                i_userband_id = 1;
             break;
 
         case 1007: // unicable band center frequency
