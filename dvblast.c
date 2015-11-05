@@ -641,7 +641,8 @@ void usage()
     msg_Raw( NULL, "  -S --diseqc           satellite number for diseqc (0: no diseqc, 1-4, A or B)" );
     msg_Raw( NULL, "  --unicable            enable unicable support (EN50494 and EN50607)" );
     msg_Raw( NULL, "  --unicable-vers       sets unicable version (1.2, if no input version 1 is assumed)" );
-    msg_Raw( NULL, "  --unicable-band       unicable channel id and frequency band (input in kHz as 'id:band'" );
+    msg_Raw( NULL, "  --unicable-id         unicable channel id" );
+    msg_Raw( NULL, "  --unicable-freq       the corresponding unicable channel center frequency in kHz" );
     msg_Raw( NULL, "  -k --uncommitted      port number for uncommitted diseqc (0: no uncommitted diseqc, 1-4)" );
     msg_Raw( NULL, "  -u --budget-mode      turn on budget mode (no hardware PID filtering)" );
     msg_Raw( NULL, "  -v --voltage          voltage to apply to the LNB (QPSK)" );
@@ -773,7 +774,8 @@ int main( int i_argc, char **pp_argv )
         { "dvr-buf-size",    required_argument, NULL, '2' },
         { "unicable",        no_argument,       NULL, '1004' },
         { "unicable-vers",   required_argument, NULL, '1005' },
-        { "unicable-band",   required_argument, NULL, '1006' },
+        { "unicable-id",     required_argument, NULL, '1006' },
+        { "unicable-freq",   required_argument, NULL, '1007' },
         { 0, 0, 0, 0 }
     };
     int option_index = 0;
@@ -1135,10 +1137,14 @@ int main( int i_argc, char **pp_argv )
                 i_unicable_vers = 1;
             break;
         
-        case 1006: // unicable band
-            
-            i_userband = ;
-            i_userband_id = ;
+        case 1006: // unicable band id
+            i_userband_id = atoi(optarg);
+            if ( i_userband_id < 1 || i_unicable_id > 8 )
+                i_unicable_id = 1;
+            break;
+
+        case 1007: // unicable band center frequency
+            i_userband = atoi(optarg);
             break;
 
         case 'h':
