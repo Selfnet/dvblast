@@ -529,7 +529,8 @@ static int FrontendDoDiseqc(void)
     msleep(100000);
 
     /* Diseqc */
-    if ( i_satnum > 0 && i_satnum < 5 )
+    /* use only if not already unicable is enabled - if unicable is enabled the satnum will be handled below */
+    if ( i_satnum > 0 && i_satnum < 5 && !b_unicable)
     {
         /* digital satellite equipment control,
          * specification is available from http://www.eutelsat.com/
@@ -590,7 +591,7 @@ static int FrontendDoDiseqc(void)
         }
         msleep(100000); /* Again, should be 15 ms */
     }
-    else if ( i_satnum == 0xA || i_satnum == 0xB )
+    else if ( (i_satnum == 0xA || i_satnum == 0xB) && !b_unicable )
     {
         /* A or B simple diseqc ("diseqc-compatible") */
         if( ioctl( i_frontend, FE_DISEQC_SEND_BURST,
@@ -601,6 +602,70 @@ static int FrontendDoDiseqc(void)
         }
         msleep(100000); /* ... */
     }
+
+    /* Unicable */
+    if ( b_unicable )
+    {
+        /* check if the needed variables are set */
+        if ( !i_unicable_vers || !i_userband || !i_userband_id )
+        {
+            msg_Err ( NULL, "unicable failed (%s)", strerror(errno) );
+            exit(1);
+        }
+
+        /* check if satnumber is set (or set A if not set) */
+        if ( !i_satnum )
+        {
+            i_satnum == 0;
+        }
+        /* if satnumber is added as a/b convert it to 0/1 */
+        else if (i_satnum == 0xA || i_satnum == 0xB)
+        {
+            if ( i_satnum == 0xB )
+                i_satnum = 1;
+            else
+                i_satnum = 0;
+        }
+                       
+        /* handle unicable versions */
+        if ( i_unicable_vers == 2 )
+        {
+            /* version 2 (EN50607)*/
+            struct dvb_diseqc_master_cmd odu_channel_change =
+                { {0xe0, 0x00, 0x5a, 0x00, 0x00, 0x00}, 6};
+            // ToDo
+        } 
+        else 
+        {
+            /* assume version 1 (EN50494)*/
+            /* create struct for channel switch*/
+            struct dvb_diseqc_master_cmd odu_channel_change =
+                { {0xe0, 0x00, 0x5a, 0x00, 0x00}, 5};
+            int i_goal = bis_frequency + i_userband;
+            int tuning_word = i_goal / 4000.0 - 350.0 + 0.5;
+            odu_channel_change.msg[3] |= (i_userband_id & 0x3) << 5;
+            odu_channel_change.msg[3] |= i_satnum << 4;
+            odu_channel_change.msg[3] |= fe_voltage << 3;
+            odu_channel_change.msg[3] |= !fe_tone << 2;
+            odu_channel_change.msg[3] |= tuning_word >> 8;
+            odu_channel_change.msg[4] |= tuning_word & 0xFF;
+            ioctl( i_frontend, FE_DISEQC_SEND_MASTER_CMD, &odu_channel_change );
+
+            int i_real = 4000 * (tuning_word + 350);
+            int i_offset = i_real - i_goal;
+            i_frequency = i_userband + i_offset;
+
+            msleep(100000);
+        }
+
+        if ( ioctl( i_frontend, FE_SET_VOLTAGE, SEC_VOLTAGE_13 ) < 0 )
+        {
+            msg_Err( NULL, "FE_SET_VOLTAGE failed (%s)", strerror(errno) );
+            exit(1);
+        }
+        return i_frequency;
+    }
+
 
     if ( ioctl( i_frontend, FE_SET_TONE, fe_tone ) < 0 )
     {
