@@ -616,7 +616,7 @@ static int FrontendDoDiseqc(void)
         /* check if satnumber is set (or set A if not set) */
         if ( !i_satnum )
         {
-            i_satnum == 0;
+            i_satnum = 0;
         }
         /* if satnumber is added as a/b convert it to 0/1 */
         else if (i_satnum == 0xA || i_satnum == 0xB)
@@ -631,8 +631,8 @@ static int FrontendDoDiseqc(void)
         if ( i_unicable_vers == 2 )
         {
             /* version 2 (EN50607)*/
-            struct dvb_diseqc_master_cmd odu_channel_change =
-                { {0xe0, 0x00, 0x5a, 0x00, 0x00, 0x00}, 6};
+            //struct dvb_diseqc_master_cmd odu_channel_change =
+            //    { {0xe0, 0x00, 0x5a, 0x00, 0x00, 0x00}, 6};
             // ToDo
         } 
         else 

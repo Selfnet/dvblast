@@ -772,10 +772,10 @@ int main( int i_argc, char **pp_argv )
         { "ca-number",       required_argument, NULL, 'y' },
         { "pidmap",          required_argument, NULL, '0' },
         { "dvr-buf-size",    required_argument, NULL, '2' },
-        { "unicable",        no_argument,       NULL, '1004' },
-        { "unicable-vers",   required_argument, NULL, '1005' },
-        { "unicable-id",     required_argument, NULL, '1006' },
-        { "unicable-freq",   required_argument, NULL, '1007' },
+        { "unicable",        no_argument,       NULL, 1004 },
+        { "unicable-vers",   required_argument, NULL, 1005 },
+        { "unicable-id",     required_argument, NULL, 1006 },
+        { "unicable-freq",   required_argument, NULL, 1007 },
         { 0, 0, 0, 0 }
     };
     int option_index = 0;
