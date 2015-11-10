@@ -633,22 +633,27 @@ static int FrontendDoDiseqc(void)
             /* version 2 (EN50607)*/
             struct dvb_diseqc_master_cmd odu_channel_change =
                 { {0x70, 0x00, 0x00, 0x00 }, 4};
-            int tuning_word = ( (( bis_frequency / 1000 ) + 0.5) - 100 );
+            int tuning_word = ( bis_frequency - 100000 );
             
             // D1
             odu_channel_change.msg[1] |= (i_userband_id & 0x1f) << 3;
-            odu_channel_change.msg[1] |= (tuning_word & 0x300) >> 8;
+            odu_channel_change.msg[1] |= (tuning_word & 0x700) >> 8;
 
             // D2
             odu_channel_change.msg[2] |= tuning_word & 0xFF;
 
             // D3
-            odu_channel_change.msg[3] |= i_satnum << 2;
-            odu_channel_change.msg[3] |= fe_voltage << 1;
-            odu_channel_change.msg[3] |= !fe_tone;
+            odu_channel_change.msg[3] |= i_satnum << 6;
+            odu_channel_change.msg[3] |= fe_voltage << 5;
+            odu_channel_change.msg[3] |= !fe_tone << 4;
 
             // Send command
-            ioctl( i_frontend, FE_DISEQC_SEND_MASTER_CMD, &odu_channel_change );
+            if ( ioctl( i_frontend, FE_DISEQC_SEND_MASTER_CMD, &odu_channel_change ) < 0)
+            {
+                msg_Err (NULL, "ioctl FE_SEND_MASTER_CMD failed (%s)", strerror(errno) );
+                exit(1);
+            }
+
 
             // no offset needed
             i_frequency = i_userband;
@@ -680,7 +685,11 @@ static int FrontendDoDiseqc(void)
             odu_channel_change.msg[4] |= tuning_word & 0xFF;
 
             // Send Command
-            ioctl( i_frontend, FE_DISEQC_SEND_MASTER_CMD, &odu_channel_change );
+            if ( ioctl( i_frontend, FE_DISEQC_SEND_MASTER_CMD, &odu_channel_change ) < 0)
+            {
+                msg_Err (NULL, "ioctl FE_SEND_MASTER_CMD failed (%s)", strerror(errno) );
+                exit(1);
+            }
 
             // calculate offset
             int i_real = 4000 * (tuning_word + 350);
