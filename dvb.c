@@ -607,7 +607,7 @@ static int FrontendDoDiseqc(void)
     if ( b_unicable )
     {
         /* check if the needed variables are set */
-        if ( !i_unicable_vers || !i_userband || !i_userband_id )
+        if ( !i_unicable_vers || !i_userband )
         {
             msg_Err ( NULL, "unicable failed (%s)", strerror(errno) );
             exit(1);
@@ -632,28 +632,29 @@ static int FrontendDoDiseqc(void)
         {
             /* version 2 (EN50607)*/
             struct dvb_diseqc_master_cmd odu_channel_change =
-                { {0x70, 0x00, 0x00, 0x00, 0x00}, 5};
-            msg_Dbg( NULL, "bis_freq: %i", bis_frequency );
-            int if_freq = ((( bis_frequency / 1000 ) - 100 ) + 0.5 );
-            /*
-            odu_channel_change.msg[3] |= (id_userband_id & 0x3) << 5;
-            odu_channel_change.msg[3] |= i_satnum << 4;
-            odu_channel_change.msg[3] |= fe_voltage << 3;
-            odu_channel_change.msg[3] |= !fe_tone << 2;
-            odu_channel_change.msg[3] |= tuning_word >> 8;
-            odu_channel_change.msg[4] |= tuning_word & 0xFF;
+                { {0x70, 0x00, 0x00, 0x00 }, 4};
+            int tuning_word = ( (( bis_frequency / 1000 ) + 0.5) - 100 );
+            
+            // D1
+            odu_channel_change.msg[1] |= (i_userband_id & 0x1f) << 3;
+            odu_channel_change.msg[1] |= (tuning_word & 0x300) >> 8;
+
+            // D2
+            odu_channel_change.msg[2] |= tuning_word & 0xFF;
+
+            // D3
+            odu_channel_change.msg[3] |= i_satnum << 2;
+            odu_channel_change.msg[3] |= fe_voltage << 1;
+            odu_channel_change.msg[3] |= !fe_tone;
+
+            // Send command
             ioctl( i_frontend, FE_DISEQC_SEND_MASTER_CMD, &odu_channel_change );
 
-		msg_Dbg( NULL, "Tuning word: %i", tuning_word);
+            // no offset needed
+            i_frequency = i_userband;
 
-            int i_real = 4000 * (tuning_word + 350);
-            int i_offset = i_real - i_goal;
-            i_frequency = i_userband + i_offset;
-
-           msleep(100000);
-            */
-            msg_Dbg( NULL, "If Freq: %i", if_freq);
-            // ToDo
+            msleep(100000);
+            
         } 
         else 
         {
@@ -661,22 +662,33 @@ static int FrontendDoDiseqc(void)
             /* create struct for channel switch*/
             struct dvb_diseqc_master_cmd odu_channel_change =
                 { {0xe0, 0x00, 0x5a, 0x00, 0x00}, 5};
+
+            //calculate goal frequency
             int i_goal = bis_frequency + i_userband;
+            
+            //calculate tuning_word
             int tuning_word = i_goal / 4000.0 - 350.0 + 0.5;
-            odu_channel_change.msg[3] |= (i_userband_id & 0x3) << 5;
-            odu_channel_change.msg[3] |= i_satnum << 4;
+            
+            // D3
+            odu_channel_change.msg[3] |= (i_userband_id & 0x7) << 5;
+            odu_channel_change.msg[3] |= (i_satnum & 0x1) << 4;
             odu_channel_change.msg[3] |= fe_voltage << 3;
             odu_channel_change.msg[3] |= !fe_tone << 2;
-            odu_channel_change.msg[3] |= tuning_word >> 8;
+            odu_channel_change.msg[3] |= (tuning_word & 0x300) >> 8;
+            
+            // D4
             odu_channel_change.msg[4] |= tuning_word & 0xFF;
+
+            // Send Command
             ioctl( i_frontend, FE_DISEQC_SEND_MASTER_CMD, &odu_channel_change );
 
-		msg_Dbg( NULL, "Tuning word: %i", tuning_word);
-
+            // calculate offset
             int i_real = 4000 * (tuning_word + 350);
             int i_offset = i_real - i_goal;
+            
+            // set tuning frequency
             i_frequency = i_userband + i_offset;
-
+            
             msleep(100000);
         }
 
