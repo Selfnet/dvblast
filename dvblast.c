@@ -669,15 +669,11 @@ void usage()
     msg_Raw( NULL, "  -X --transmission     DVB-T transmission (2, 4, 8 or -1 auto, default)" );
     msg_Raw( NULL, "  -s --symbol-rate" );
     msg_Raw( NULL, "  -S --diseqc           satellite number for diseqc (0: no diseqc, 1-4, A or B)" );
-<<<<<<< HEAD
     msg_Raw( NULL, "  -k --uncommitted      port number for uncommitted DiSEqC switch (0: no uncommitted DiSEqC switch, 1-16)" );
-=======
     msg_Raw( NULL, "  --unicable            enable unicable support (EN50494 and EN50607)" );
     msg_Raw( NULL, "  --unicable-vers       sets unicable version (1.2, if no input version 1 is assumed)" );
     msg_Raw( NULL, "  --unicable-id         unicable channel id" );
     msg_Raw( NULL, "  --unicable-freq       the corresponding unicable channel center frequency in kHz" );
-    msg_Raw( NULL, "  -k --uncommitted      port number for uncommitted diseqc (0: no uncommitted diseqc, 1-4)" );
->>>>>>> development/unicable
     msg_Raw( NULL, "  -u --budget-mode      turn on budget mode (no hardware PID filtering)" );
     msg_Raw( NULL, "  -v --voltage          voltage to apply to the LNB (QPSK)" );
     msg_Raw( NULL, "  -w --select-pmts      set a PID filter on all PMTs (auto on, when config file is used)" );
@@ -813,13 +809,8 @@ int main( int i_argc, char **pp_argv )
         { "unicable-freq",   required_argument, NULL, 1007 },
         { 0, 0, 0, 0 }
     };
-<<<<<<< HEAD
-
-    while ( (c = getopt_long(i_argc, pp_argv, "q::c:r:t:o:i:a:n:5:f:F:R:s:S:k:v:pb:I:m:P:K:G:H:X:O:uwUTL:E:d:3D:A:lg:zCWYeM:N:j:J:B:x:Q:6:7:hVZ:y:0:1:2:9:", long_options, NULL)) != -1 )
-=======
     int option_index = 0;
-    while ( (c = getopt_long(i_argc, pp_argv, "q::c:r:t:o:i:a:n:5:f:F:R:s:S:k:v:pb:I:m:P:K:G:H:X:O:uwUTL:E:d:D:A:lg:zCWYeM:N:j:J:B:x:Q:hVZ:y:0:1:2:", long_options, &option_index)) != -1 )
->>>>>>> development/unicable
+    while ( (c = getopt_long(i_argc, pp_argv, "q::c:r:t:o:i:a:n:5:f:F:R:s:S:k:v:pb:I:m:P:K:G:H:X:O:uwUTL:E:d:333D:A:lg:zCWYeM:N:j:J:B:x:Q:6:7:hVZ:y:0:1:2:9:", long_options, &option_index)) != -1 )
     {
         switch ( c )
         {
