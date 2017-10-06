@@ -24,20 +24,29 @@ E: a DOT j DOT gatward AT reading DOT ac DOT uk
 C: gatty
 D: EIT pass-through, IPv6 support, various bug fixes
 
-N: Peter Partin
-E: peter DOT martin AT tripleplay DASH servies DOT com
-D: ATSC, MRTG, PID remap
+N: Tillmann Karras
+E: tillmann.karras AT selfnet DOT de
+D: Unicable Support
+
+N: Simon Lockhart
+E: simon AT slimey DOT org
+D: Deltacast ASI card support
 
 N: Christophe Massiot
 E: massiot AT via DOT ecp DOT fr
 C: massiot
 D: Most of the code
 
+N: Michael Mueller
+E: michael.mueller AT selfnet DOT de
+P: Key: 0x8746E4E1 Fingerprint: 0DE6 4766 E0A4 1469 E294 7FFB E1D8 7394 8746 E4E1
+D: Unicable Support
+
+N: Peter Partin
+E: peter DOT martin AT tripleplay DASH servies DOT com
+D: ATSC, MRTG, PID remap
+
 N: Jean-Paul Saman
 E: jpsaman AT videolan DOT org
 C: jpsaman
 D: DVB-S2 bug fixes, syslog support
-
-N: Simon Lockhart
-E: simon AT slimey DOT org
-D: Deltacast ASI card support
