@@ -73,6 +73,10 @@ int i_srate = 27500000;
 int i_fec = 999;
 int i_rolloff = 35;
 int i_satnum = 0;
+bool b_unicable = false;
+int i_unicable_vers = 0;
+int i_userband = 0;
+int i_userband_id = 0;
 int i_uncommitted = 0;
 int i_voltage = 13;
 int b_tone = 0;
@@ -665,7 +669,15 @@ void usage()
     msg_Raw( NULL, "  -X --transmission     DVB-T transmission (2, 4, 8 or -1 auto, default)" );
     msg_Raw( NULL, "  -s --symbol-rate" );
     msg_Raw( NULL, "  -S --diseqc           satellite number for diseqc (0: no diseqc, 1-4, A or B)" );
+<<<<<<< HEAD
     msg_Raw( NULL, "  -k --uncommitted      port number for uncommitted DiSEqC switch (0: no uncommitted DiSEqC switch, 1-16)" );
+=======
+    msg_Raw( NULL, "  --unicable            enable unicable support (EN50494 and EN50607)" );
+    msg_Raw( NULL, "  --unicable-vers       sets unicable version (1.2, if no input version 1 is assumed)" );
+    msg_Raw( NULL, "  --unicable-id         unicable channel id" );
+    msg_Raw( NULL, "  --unicable-freq       the corresponding unicable channel center frequency in kHz" );
+    msg_Raw( NULL, "  -k --uncommitted      port number for uncommitted diseqc (0: no uncommitted diseqc, 1-4)" );
+>>>>>>> development/unicable
     msg_Raw( NULL, "  -u --budget-mode      turn on budget mode (no hardware PID filtering)" );
     msg_Raw( NULL, "  -v --voltage          voltage to apply to the LNB (QPSK)" );
     msg_Raw( NULL, "  -w --select-pmts      set a PID filter on all PMTs (auto on, when config file is used)" );
@@ -795,10 +807,19 @@ int main( int i_argc, char **pp_argv )
         { "ca-number",       required_argument, NULL, 'y' },
         { "pidmap",          required_argument, NULL, '0' },
         { "dvr-buf-size",    required_argument, NULL, '2' },
+        { "unicable",        no_argument,       NULL, 1004 },
+        { "unicable-vers",   required_argument, NULL, 1005 },
+        { "unicable-id",     required_argument, NULL, 1006 },
+        { "unicable-freq",   required_argument, NULL, 1007 },
         { 0, 0, 0, 0 }
     };
+<<<<<<< HEAD
 
     while ( (c = getopt_long(i_argc, pp_argv, "q::c:r:t:o:i:a:n:5:f:F:R:s:S:k:v:pb:I:m:P:K:G:H:X:O:uwUTL:E:d:3D:A:lg:zCWYeM:N:j:J:B:x:Q:6:7:hVZ:y:0:1:2:9:", long_options, NULL)) != -1 )
+=======
+    int option_index = 0;
+    while ( (c = getopt_long(i_argc, pp_argv, "q::c:r:t:o:i:a:n:5:f:F:R:s:S:k:v:pb:I:m:P:K:G:H:X:O:uwUTL:E:d:D:A:lg:zCWYeM:N:j:J:B:x:Q:hVZ:y:0:1:2:", long_options, &option_index)) != -1 )
+>>>>>>> development/unicable
     {
         switch ( c )
         {
@@ -1147,8 +1168,33 @@ int main( int i_argc, char **pp_argv )
             i_dvr_buffer_size *= TS_SIZE;
             break;
 #endif
+
+        case 1004: // unicable
+            b_unicable = true;
+            break;
+
+        case 1005: // unicable version
+            i_unicable_vers = atoi(optarg);
+            if ( i_unicable_vers < 1 || i_unicable_vers > 2 )
+                i_unicable_vers = 1;
+            break;
+        
+        case 1006: // unicable band id
+            i_userband_id = atoi(optarg);
+            if ( i_userband_id < 0 || i_userband_id > 8 )
+                i_userband_id = 0;
+            break;
+
+        case 1007: // unicable band center frequency
+            i_userband = atoi(optarg);
+            break;
+
         case 'h':
+            usage();
+            break;
+        
         default:
+        if ( !option_index )
             usage();
         }
     }
