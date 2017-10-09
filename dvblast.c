@@ -1223,13 +1223,9 @@ int main( int i_argc, char **pp_argv )
             break;
         
         default:
-        if ( !option_index )
-            usage();
-            break;
-
-        default:
             if ( !option_index )
                 usage();
+            break;
         }
     }
     if ( optind < i_argc || pf_Open == NULL )
