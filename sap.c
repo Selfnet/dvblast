@@ -66,6 +66,7 @@ static int i_sap_handle;
 static int i_next_output = 0;
 static struct sockaddr_in  addr4;
 static struct sockaddr_in6 addr6;
+static const char *psz_dvb_charset = "UTF-8";
 
 /* Checks if the UTF-8 character pointed to by chr is a DVB control code
  * as defined by EN 300 468 Annex A.1. */
