@@ -51,6 +51,8 @@
 
 #include "mrtg-cnt.h"
 
+#include "sap.h"
+
 /*****************************************************************************
  * Local declarations
  *****************************************************************************/
@@ -634,7 +636,10 @@ void usage()
     msg_Raw( NULL, "  -H --hierarchy        DVB-T hierarchy (0, 1, 2, 4 or -1 auto, default)" );
     msg_Raw( NULL, "  -X --transmission     DVB-T transmission (2, 4, 8 or -1 auto, default)" );
     msg_Raw( NULL, "  -s --symbol-rate" );
-    msg_Raw( NULL, "  -S --diseqc           satellite number for diseqc (0: no diseqc, 1-4, A or B)" );
+    msg_Raw( NULL, "  -S --diseqc           satellite number for diseqc (0: no diseqc, 1-4, A or B)" ); 
+    msg_Raw( NULL, "     --unicable <vers>                      Unicable version to use");
+    msg_Raw( NULL, "     --unicable-channel <band:frequency>    Unicable band and the corresponding center frequency to use");
+    msg_Raw( NULL, "     --unicable-sattelite <A|B>             Unicable sattelite input to use (A or B input)");
     msg_Raw( NULL, "  -k --uncommitted      port number for uncommitted diseqc (0: no uncommitted diseqc, 1-4)" );
     msg_Raw( NULL, "  -u --budget-mode      turn on budget mode (no hardware PID filtering)" );
     msg_Raw( NULL, "  -v --voltage          voltage to apply to the LNB (QPSK)" );
@@ -677,7 +682,11 @@ void usage()
     msg_Raw( NULL, "  -6 --print-period     periodicity at which we print bitrate and errors (in ms)" );
     msg_Raw( NULL, "  -7 --es-timeout       time of inactivy before which a PID is reported down (in ms)" );
     msg_Raw( NULL, "  -r --remote-socket <remote socket>" );
-    msg_Raw( NULL, "  -Z --mrtg-file <file> Log input packets and errors into mrtg-file" );
+    msg_Raw( NULL, "     --sap              announce streams via SAP/SDP");
+    msg_Raw( NULL, "     --sap-ip4 <ip4>    multicast IPv4 address for SAP announcements (default: %s)", SAP_DEFAULT_IP4_ADDR);
+    msg_Raw( NULL, "     --sap-ip6 <ip6>    multicast IPv6 address for SAP announcements (default: %s)", SAP_DEFAULT_IP6_ADDR);
+    msg_Raw( NULL, "     --sap-interval <secs> time interval between announcements per stream (default 1)");
+   msg_Raw( NULL, "  -Z --mrtg-file <file> Log input packets and errors into mrtg-file" );
     msg_Raw( NULL, "  -V --version          only display the version" );
     exit(1);
 }
@@ -705,69 +714,77 @@ int main( int i_argc, char **pp_argv )
      */
     static const struct option long_options[] =
     {
-        { "config-file",     required_argument, NULL, 'c' },
-        { "remote-socket",   required_argument, NULL, 'r' },
-        { "ttl",             required_argument, NULL, 't' },
-        { "rtp-output",      required_argument, NULL, 'o' },
-        { "priority",        required_argument, NULL, 'i' },
-        { "adapter",         required_argument, NULL, 'a' },
-        { "frontend-number", required_argument, NULL, 'n' },
-        { "delsys",          required_argument, NULL, '5' },
-        { "frequency",       required_argument, NULL, 'f' },
-        { "fec-inner",       required_argument, NULL, 'F' },
-        { "rolloff",         required_argument, NULL, 'R' },
-        { "symbol-rate",     required_argument, NULL, 's' },
-        { "diseqc",          required_argument, NULL, 'S' },
-        { "uncommitted",     required_argument, NULL, 'k' },
-        { "voltage",         required_argument, NULL, 'v' },
-        { "force-pulse",     no_argument,       NULL, 'p' },
-        { "bandwidth",       required_argument, NULL, 'b' },
-        { "inversion",       required_argument, NULL, 'I' },
-        { "modulation",      required_argument, NULL, 'm' },
-        { "pilot",           required_argument, NULL, 'P' },
-        { "multistream-id",  required_argument, NULL, '1' },
-        { "fec-lp",          required_argument, NULL, 'K' },
-        { "guard",           required_argument, NULL, 'G' },
-        { "hierarchy",       required_argument, NULL, 'H' },
-        { "transmission",    required_argument, NULL, 'X' },
-        { "lock-timeout",    required_argument, NULL, 'O' },
-        { "budget-mode",     no_argument,       NULL, 'u' },
-        { "select-pmts",     no_argument,       NULL, 'w' },
-        { "udp",             no_argument,       NULL, 'U' },
-        { "unique-ts-id",    no_argument,       NULL, 'T' },
-        { "latency",         required_argument, NULL, 'L' },
-        { "retention",       required_argument, NULL, 'E' },
-        { "duplicate",       required_argument, NULL, 'd' },
-        { "passthrough",     no_argument,       NULL, '3' },
-        { "rtp-input",       required_argument, NULL, 'D' },
-        { "asi-adapter",     required_argument, NULL, 'A' },
-        { "any-type",        no_argument,       NULL, 'z' },
-        { "dvb-compliance",  no_argument,       NULL, 'C' },
-        { "emm-passthrough", no_argument,       NULL, 'W' },
-        { "ecm-passthrough", no_argument,       NULL, 'Y' },
-        { "epg-passthrough", no_argument,       NULL, 'e' },
-        { "network-name",    no_argument,       NULL, 'M' },
-        { "network-id",      no_argument,       NULL, 'N' },
-        { "system-charset",  required_argument, NULL, 'j' },
-        { "dvb-charset",     required_argument, NULL, 'J' },
-        { "provider-name",   required_argument, NULL, 'B' },
-        { "logger",          no_argument,       NULL, 'l' },
-        { "logger-ident",    required_argument, NULL, 'g' },
-        { "print",           required_argument, NULL, 'x' },
-        { "quit-timeout",    required_argument, NULL, 'Q' },
-        { "print-period",    required_argument, NULL, '6' },
-        { "es-timeout",      required_argument, NULL, '7' },
-        { "quiet",           no_argument,       NULL, 'q' },
-        { "help",            no_argument,       NULL, 'h' },
-        { "version",         no_argument,       NULL, 'V' },
-        { "mrtg-file",       required_argument, NULL, 'Z' },
-        { "ca-number",       required_argument, NULL, 'y' },
-        { "pidmap",          required_argument, NULL, '0' },
-        { "dvr-buf-size",    required_argument, NULL, '2' },
+        { "config-file",        required_argument, NULL, 'c' },
+        { "remote-socket",      required_argument, NULL, 'r' },
+        { "ttl",                required_argument, NULL, 't' },
+        { "rtp-output",         required_argument, NULL, 'o' },
+        { "priority",           required_argument, NULL, 'i' },
+        { "adapter",            required_argument, NULL, 'a' },
+        { "frontend-number",    required_argument, NULL, 'n' },
+        { "delsys",             required_argument, NULL, '5' },
+        { "frequency",          required_argument, NULL, 'f' },
+        { "fec-inner",          required_argument, NULL, 'F' },
+        { "rolloff",            required_argument, NULL, 'R' },
+        { "symbol-rate",        required_argument, NULL, 's' },
+        { "diseqc",             required_argument, NULL, 'S' },
+        { "uncommitted",        required_argument, NULL, 'k' },
+        { "voltage",            required_argument, NULL, 'v' },
+        { "force-pulse",        no_argument,       NULL, 'p' },
+        { "bandwidth",          required_argument, NULL, 'b' },
+        { "inversion",          required_argument, NULL, 'I' },
+        { "modulation",         required_argument, NULL, 'm' },
+        { "pilot",              required_argument, NULL, 'P' },
+        { "multistream-id",     required_argument, NULL, '1' },
+        { "fec-lp",             required_argument, NULL, 'K' },
+        { "guard",              required_argument, NULL, 'G' },
+        { "hierarchy",          required_argument, NULL, 'H' },
+        { "transmission",       required_argument, NULL, 'X' },
+        { "lock-timeout",       required_argument, NULL, 'O' },
+        { "budget-mode",        no_argument,       NULL, 'u' },
+        { "select-pmts",        no_argument,       NULL, 'w' },
+        { "udp",                no_argument,       NULL, 'U' },
+        { "unique-ts-id",       no_argument,       NULL, 'T' },
+        { "latency",            required_argument, NULL, 'L' },
+        { "retention",          required_argument, NULL, 'E' },
+        { "duplicate",          required_argument, NULL, 'd' },
+        { "passthrough",        no_argument,       NULL, '3' },
+        { "rtp-input",          required_argument, NULL, 'D' },
+        { "asi-adapter",        required_argument, NULL, 'A' },
+        { "any-type",           no_argument,       NULL, 'z' },
+        { "dvb-compliance",     no_argument,       NULL, 'C' },
+        { "emm-passthrough",    no_argument,       NULL, 'W' },
+        { "ecm-passthrough",    no_argument,       NULL, 'Y' },
+        { "epg-passthrough",    no_argument,       NULL, 'e' },
+        { "network-name",       no_argument,       NULL, 'M' },
+        { "network-id",         no_argument,       NULL, 'N' },
+        { "system-charset",     required_argument, NULL, 'j' },
+        { "dvb-charset",        required_argument, NULL, 'J' },
+        { "provider-name",      required_argument, NULL, 'B' },
+        { "logger",             no_argument,       NULL, 'l' },
+        { "logger-ident",       required_argument, NULL, 'g' },
+        { "print",              required_argument, NULL, 'x' },
+        { "quit-timeout",       required_argument, NULL, 'Q' },
+        { "print-period",       required_argument, NULL, '6' },
+        { "es-timeout",         required_argument, NULL, '7' },
+        { "quiet",              no_argument,       NULL, 'q' },
+        { "help",               no_argument,       NULL, 'h' },
+        { "version",            no_argument,       NULL, 'V' },
+        { "mrtg-file",          required_argument, NULL, 'Z' },
+        { "ca-number",          required_argument, NULL, 'y' },
+        { "pidmap",             required_argument, NULL, '0' },
+        { "dvr-buf-size",       required_argument, NULL, '2' },
+        { "sap",                no_argument,       &b_enable_sap, 1 },
+        { "sap-ip4",            required_argument, NULL,  1001 },
+        { "sap-ip6",            required_argument, NULL,  1002 },
+        { "sap-interval",       required_argument, NULL,  1003 },
+        { "unicable",           required_argument, NULL,  1004 },
+        { "unicable-channel",   required_argument, NULL,  1005 },
+        { "unicable-sattelite", required_argument, NULL,  1006 },
         { 0, 0, 0, 0 }
     };
 
-    while ( (c = getopt_long(i_argc, pp_argv, "q::c:r:t:o:i:a:n:5:f:F:R:s:S:k:v:pb:I:m:P:K:G:H:X:O:uwUTL:E:d:3D:A:lg:zCWYeM:N:j:J:B:x:Q:6:7:hVZ:y:0:1:2:", long_options, NULL)) != -1 )
+    int option_index = 0;
+    while ( (c = getopt_long(i_argc, pp_argv, "q::c:r:t:o:i:a:n:5:f:F:R:s:S:k:v:pb:I:m:P:K:G:H:X:O:uwUTL:E:d:3D:A:lg:zCWYeM:N:j:J:B:x:Q:6:7:hVZ:y:0:1:2:", long_options, &option_index)) != -1 )
     {
         switch ( c )
         {
@@ -1114,9 +1131,48 @@ int main( int i_argc, char **pp_argv )
             i_dvr_buffer_size *= TS_SIZE;
             break;
 #endif
+        case 1001: // sap-ip4
+          //  if ( inet_pton(AF_INET, optarg, &g_sap_ip4_dest) != 1 )
+          //  {
+          //      msg_Err( NULL, "Invalid SAP IPv4 address" );
+          //      exit(EXIT_FAILURE);
+          //  }
+          //  if ( !IN_MULTICAST(ntohl(g_sap_ip4_dest)) )
+          //      msg_Warn( NULL, "SAP IPv4 address is not a multicast address (using it anyway)" );
+            break;
+
+        case 1002: // sap-ip6
+          //  if ( inet_pton(AF_INET6, optarg, &g_sap_ip6_dest) != 1 )
+          //  {
+          //      msg_Err( NULL, "Invalid SAP IPv6 address" );
+          //      exit(EXIT_FAILURE);
+          //  }
+          //  if ( !IN6_IS_ADDR_MULTICAST( &g_sap_ip6_dest ) )
+          //      msg_Warn( NULL, "SAP IPv6 address is not a multicast address (using it anyway)" );
+            break;
+
+        case 1003: // sap-interval
+          //  g_sap_interval = atoi(optarg);
+          //  if ( g_sap_interval < 1 )
+          //  g_sap_interval = 1;
+          //  break;
+
+        case 1004: // unicable version
+            break;
+
+        case 1005: // unicable channel and frequency
+            break;
+
+        case 1006: // unicable sattelite input
+            break;
+
         case 'h':
-        default:
             usage();
+            break;
+
+        default:
+            if ( !option_index )
+                usage();
         }
     }
     if ( optind < i_argc || pf_Open == NULL )

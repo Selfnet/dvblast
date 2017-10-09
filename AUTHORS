@@ -41,3 +41,8 @@ D: DVB-S2 bug fixes, syslog support
 N: Simon Lockhart
 E: simon AT slimey DOT org
 D: Deltacast ASI card support
+
+N: Selfnet e.V. (Tillmann Karras, Markus Wick, Dirk Braunschweiger, Lukas Kramer, Michael Mueller)
+E: admin AT selfnet DOT de
+W: www.selfnet.de
+D: SAP and Unicable (SCR) support
