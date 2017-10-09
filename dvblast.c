@@ -109,6 +109,8 @@ int i_verbose = DEFAULT_VERBOSITY;
 int i_syslog = 0;
 char *psz_syslog_ident = NULL;
 
+int b_enable_sap = 0;
+
 bool b_enable_emm = false;
 bool b_enable_ecm = false;
 
@@ -1170,6 +1172,32 @@ int main( int i_argc, char **pp_argv )
             break;
 #endif
 
+        case 1001: // sap-ip4
+            if ( inet_pton(AF_INET, optarg, &g_sap_ip4_dest) != 1 )
+            {
+                msg_Err( NULL, "Invalid SAP IPv4 address" );
+                exit(EXIT_FAILURE);
+            }
+            if ( !IN_MULTICAST(ntohl(g_sap_ip4_dest)) )
+                msg_Warn( NULL, "SAP IPv4 address is not a multicast address (using it anyway)" );
+            break;
+
+        case 1002: // sap-ip6
+            if ( inet_pton(AF_INET6, optarg, &g_sap_ip6_dest) != 1 )
+            {
+                msg_Err( NULL, "Invalid SAP IPv6 address" );
+                exit(EXIT_FAILURE);
+            }
+            if ( !IN6_IS_ADDR_MULTICAST( &g_sap_ip6_dest ) )
+                msg_Warn( NULL, "SAP IPv6 address is not a multicast address (using it anyway)" );
+            break;
+
+        case 1003: // sap-interval
+            g_sap_interval = atoi(optarg);
+            if ( g_sap_interval < 1 )
+            g_sap_interval = 1;
+            break;
+
         case 1004: // unicable
             b_unicable = true;
             break;
@@ -1189,33 +1217,7 @@ int main( int i_argc, char **pp_argv )
         case 1007: // unicable band center frequency
             i_userband = atoi(optarg);
             break;
-
-        case 1008: // sap-ip4
-            if ( inet_pton(AF_INET, optarg, &g_sap_ip4_dest) != 1 )
-            {
-                msg_Err( NULL, "Invalid SAP IPv4 address" );
-                exit(EXIT_FAILURE);
-            }
-            if ( !IN_MULTICAST(ntohl(g_sap_ip4_dest)) )
-                msg_Warn( NULL, "SAP IPv4 address is not a multicast address (using it anyway)" );
-            break;
-
-        case 1009: // sap-ip6
-            if ( inet_pton(AF_INET6, optarg, &g_sap_ip6_dest) != 1 )
-            {
-                msg_Err( NULL, "Invalid SAP IPv6 address" );
-                exit(EXIT_FAILURE);
-            }
-            if ( !IN6_IS_ADDR_MULTICAST( &g_sap_ip6_dest ) )
-                msg_Warn( NULL, "SAP IPv6 address is not a multicast address (using it anyway)" );
-            break;
-
-        case 1010: // sap-interval
-            g_sap_interval = atoi(optarg);
-            if ( g_sap_interval < 1 )
-            g_sap_interval = 1;
-            break;
-
+        
         case 'h':
             usage();
             break;
@@ -1321,8 +1323,14 @@ int main( int i_argc, char **pp_argv )
 
     config_ReadFile();
 
+    if ( b_enable_sap )
+        sap_Init();
+
     if ( psz_srv_socket != NULL )
         comm_Open();
+
+    if ( b_enable_sap )
+        sap_Announce();
 
     if ( i_quit_timeout_duration )
     {
@@ -1351,6 +1359,9 @@ int main( int i_argc, char **pp_argv )
     default:
         break;
     }
+
+    if ( b_enable_sap )
+        sap_Close();
 
     if ( b_enable_syslog )
         msg_Disconnect();
