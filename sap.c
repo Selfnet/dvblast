@@ -121,7 +121,7 @@ static size_t dvb_string_strip_control_codes( char *str, size_t size )
 }
 
 /* Converts a DVB string into native encoding and returns its new size. */
-static size_t dvb_string_copy( char *dest, size_t dest_max_len,
+static size_t dvb_string_convert_copy( char *dest, size_t dest_max_len,
                                const uint8_t *src, size_t src_len )
 {
     if ( !src_len || !dest_max_len )
@@ -344,17 +344,17 @@ void sap_Announce(void)
                        "v=0\r\n"
                        "o=- %d 1 IN %s %s\r\n"
                        "s=", i_sid, i_fam == AF_INET6 ? "IP6" : "IP4", psz_fqdn);
-    worker += dvb_string_copy(worker, worker_end-worker, p_service, i_service_len);
+    worker += dvb_string_convert_copy(worker, worker_end-worker, p_service, i_service_len);
     if ( i_event_len )
     {
         worker += snprintf(worker, worker_end-worker, " [");
-        worker += dvb_string_copy(worker, worker_end-worker, p_event, i_event_len);
+        worker += dvb_string_convert_copy(worker, worker_end-worker, p_event, i_event_len);
         worker += snprintf(worker, worker_end-worker, "]");
     }
     worker += snprintf(worker, worker_end-worker,
                        "\r\n"
                        "i=");
-    worker += dvb_string_copy(worker, worker_end-worker, p_text, i_text_len);
+    worker += dvb_string_convert_copy(worker, worker_end-worker, p_text, i_text_len);
     worker += snprintf(worker, worker_end-worker,
                        "\r\n"
                        "u=http://www.videolan.org/projects/dvblast.html\r\n");
