@@ -24,20 +24,25 @@ E: a DOT j DOT gatward AT reading DOT ac DOT uk
 C: gatty
 D: EIT pass-through, IPv6 support, various bug fixes
 
-N: Peter Partin
-E: peter DOT martin AT tripleplay DASH servies DOT com
-D: ATSC, MRTG, PID remap
+N: Simon Lockhart
+E: simon AT slimey DOT org
+D: Deltacast ASI card support
 
 N: Christophe Massiot
 E: massiot AT via DOT ecp DOT fr
 C: massiot
 D: Most of the code
 
+N: Peter Partin
+E: peter DOT martin AT tripleplay DASH servies DOT com
+D: ATSC, MRTG, PID remap
+
 N: Jean-Paul Saman
 E: jpsaman AT videolan DOT org
 C: jpsaman
 D: DVB-S2 bug fixes, syslog support
 
-N: Simon Lockhart
-E: simon AT slimey DOT org
-D: Deltacast ASI card support
+N: Selfnet e.V. (Dirk Braunschweiger, Tillmann Karras, Michael Mueller, Markus Wick)
+E: admin AT selfnet DOT de
+W: www.selfnet.de
+D: Unicable and SAP support
