@@ -49,6 +49,7 @@
 #include <bitstream/dvb/si.h>
 #include <bitstream/dvb/si_print.h>
 #include <bitstream/mpeg/psi_print.h>
+#include "bitstream_patch.h"
 
 /*****************************************************************************
  * Local declarations

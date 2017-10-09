@@ -37,6 +37,8 @@ Changes between 2.2 and 3.0:
   * Add output options to set network ID and network name
   * Switch default string charset to UTF-8
   * Do not remove padding with ASI
+  * Added support for SAP announcements generated from SDT.
+  * Added support for Unicable (SCR) support version 1 and 2.
 
 Changes between 2.1 and 2.2:
 ----------------------------

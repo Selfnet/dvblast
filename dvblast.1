@@ -178,6 +178,27 @@ Symbole rate
 \fB\-S\fR, \fB\-\-diseqc\fR <diseqc>
 Satellite number for diseqc (0: no diseqc, 1\-4, A or B)
 .TP
+\fB--sap\fR
+Announce streams via SAP/SDP
+.TP
+\fB--sap-ip4 <ip>\fB
+Multicast IPv4 address for SAP announcements (default: 239.195.255.255)
+.TP
+\fB--sap-ip6 <ip>\fB
+Multicast IPv6 address for SAP announcements (default: ff08::2:7ffe)
+.TP
+\fB--sap-interval <secs>\fB
+Time interval between announcements per stream (default: 1)
+.TP
+\fB--unicable <version>\fR
+Use unicable reception depending on the version
+.TP
+\fB--unicable-channel <band:frequency>\fB
+Unicable channel and the center frequency of it to use.
+.TP
+\fB--unicable-satellite <A|B>\fB
+Sattelite Input to use for Unicable (A or B) 
+.TP
 \fB\-t\fR, \fB\-\-ttl\fR <ttl>
 Time-To-Live of the multicast stream
 .TP

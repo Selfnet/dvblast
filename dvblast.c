@@ -51,6 +51,8 @@
 
 #include "mrtg-cnt.h"
 
+#include "sap.h"
+
 /*****************************************************************************
  * Local declarations
  *****************************************************************************/
@@ -715,6 +717,10 @@ void usage()
     msg_Raw( NULL, "  -6 --print-period     periodicity at which we print bitrate and errors (in ms)" );
     msg_Raw( NULL, "  -7 --es-timeout       time of inactivy before which a PID is reported down (in ms)" );
     msg_Raw( NULL, "  -r --remote-socket <remote socket>" );
+    msg_Raw( NULL, "     --sap              announce streams via SAP/SDP");
+    msg_Raw( NULL, "     --sap-ip4 <ip4>    multicast IPv4 address for SAP announcements (default: %s)", SAP_DEFAULT_IP4_ADDR);
+    msg_Raw( NULL, "     --sap-ip6 <ip6>    multicast IPv6 address for SAP announcements (default: %s)", SAP_DEFAULT_IP6_ADDR);
+    msg_Raw( NULL, "     --sap-interval <secs> time interval between announcements per stream (default 1)");
     msg_Raw( NULL, "  -Z --mrtg-file <file> Log input packets and errors into mrtg-file" );
     msg_Raw( NULL, "  -V --version          only display the version" );
     exit(1);
@@ -807,6 +813,10 @@ int main( int i_argc, char **pp_argv )
         { "unicable-vers",   required_argument, NULL, 1005 },
         { "unicable-id",     required_argument, NULL, 1006 },
         { "unicable-freq",   required_argument, NULL, 1007 },
+        { "sap",                no_argument,       &b_enable_sap, 1 },
+        { "sap-ip4",            required_argument, NULL,  1001 },
+        { "sap-ip6",            required_argument, NULL,  1002 },
+        { "sap-interval",       required_argument, NULL,  1003 },
         { 0, 0, 0, 0 }
     };
     int option_index = 0;
@@ -1180,6 +1190,32 @@ int main( int i_argc, char **pp_argv )
             i_userband = atoi(optarg);
             break;
 
+        case 1008: // sap-ip4
+            if ( inet_pton(AF_INET, optarg, &g_sap_ip4_dest) != 1 )
+            {
+                msg_Err( NULL, "Invalid SAP IPv4 address" );
+                exit(EXIT_FAILURE);
+            }
+            if ( !IN_MULTICAST(ntohl(g_sap_ip4_dest)) )
+                msg_Warn( NULL, "SAP IPv4 address is not a multicast address (using it anyway)" );
+            break;
+
+        case 1009: // sap-ip6
+            if ( inet_pton(AF_INET6, optarg, &g_sap_ip6_dest) != 1 )
+            {
+                msg_Err( NULL, "Invalid SAP IPv6 address" );
+                exit(EXIT_FAILURE);
+            }
+            if ( !IN6_IS_ADDR_MULTICAST( &g_sap_ip6_dest ) )
+                msg_Warn( NULL, "SAP IPv6 address is not a multicast address (using it anyway)" );
+            break;
+
+        case 1010: // sap-interval
+            g_sap_interval = atoi(optarg);
+            if ( g_sap_interval < 1 )
+            g_sap_interval = 1;
+            break;
+
         case 'h':
             usage();
             break;
@@ -1187,6 +1223,11 @@ int main( int i_argc, char **pp_argv )
         default:
         if ( !option_index )
             usage();
+            break;
+
+        default:
+            if ( !option_index )
+                usage();
         }
     }
     if ( optind < i_argc || pf_Open == NULL )
