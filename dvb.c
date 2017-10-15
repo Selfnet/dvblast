@@ -459,6 +459,7 @@ static int FrontendDoDiseqc(void)
     fe_sec_voltage_t fe_voltage;
     fe_sec_tone_mode_t fe_tone;
     int bis_frequency;
+    int target_frequency;
 
     switch ( i_voltage )
     {
@@ -668,13 +669,13 @@ static int FrontendDoDiseqc(void)
             msg_Dbg(NULL,"band: %d",!fe_tone);
 
             msg_Dbg( NULL, "userband=%d userband_id=%d fe_voltage=%d bis_frequency=%d", i_userband, i_userband_id, fe_voltage, bis_frequency );
-            msg_Dbg( NULL, "bis_frequency=%d tuningword=%d", bis_frequency, tuning_word);
-            msg_Dbg( NULL, "D1=%d D2=%d D3=%d D4=%d", odu_channel_change.msg[1], odu_channel_change.msg[2], odu_channel_change.msg[3], odu_channel_change.msg[4]);
+            msg_Dbg( NULL, "bis_frequency=%d tuningword=%x", bis_frequency, tuning_word);
+            msg_Dbg( NULL, "D1=%x D2=%x D3=%x D4=%x", odu_channel_change.msg[1], odu_channel_change.msg[2], odu_channel_change.msg[3], odu_channel_change.msg[4]);
 
             // no offset needed
-            i_frequency = i_userband;
+            target_frequency = i_userband;
 
-            msleep(100000);
+            msleep(200000);
             
         } 
         else 
@@ -711,12 +712,12 @@ static int FrontendDoDiseqc(void)
             int i_offset = i_real - i_goal;
             
             // set tuning frequency
-            i_frequency = i_userband + i_offset;
+            target_frequency = i_userband + i_offset;
                 
             msg_Dbg( NULL, "userband=%d userband_id=%d fe_voltage=%d bis_frequency=%d", i_userband, i_userband_id, fe_voltage, bis_frequency );
-            msg_Dbg( NULL, "i_goal=%d tuning_word=%d fe_tone=%d i_real=%d i_offset=%d i_frequency=%d ", i_goal, tuning_word, fe_tone, i_real, i_offset, i_frequency );
+            msg_Dbg( NULL, "i_goal=%d tuning_word=%x fe_tone=%d i_real=%d i_offset=%d target_frequency=%d ", i_goal, tuning_word, fe_tone, i_real, i_offset, target_frequency );
 
-            msleep(100000);
+            msleep(200000);
         }
 
         if ( ioctl( i_frontend, FE_SET_VOLTAGE, SEC_VOLTAGE_13 ) < 0 )
@@ -724,7 +725,7 @@ static int FrontendDoDiseqc(void)
             msg_Err( NULL, "FE_SET_VOLTAGE failed (%s)", strerror(errno) );
             exit(1);
         }
-        return i_frequency;
+        return target_frequency;
     }
 
 
@@ -1414,6 +1415,7 @@ static void FrontendSet( bool b_init )
         p->props[INVERSION].u.data = GetInversion();
         p->props[SYMBOL_RATE].u.data = i_srate;
         p->props[FEC_INNER].u.data = GetFECInner(info.caps);
+        msg_Dbg(NULL, "Freq = %d, ifreq=%d", p->props[FREQUENCY].u.data,i_frequency);
         p->props[FREQUENCY].u.data = FrontendDoDiseqc();
 
         msg_Dbg( NULL, "tuning DVB-S frontend to f=%d srate=%d inversion=%d fec=%d rolloff=%d modulation=%s pilot=%d mis=%d",
