@@ -40,6 +40,7 @@
 #include <arpa/inet.h>
 #include <poll.h>
 #include <errno.h>
+#include <math.h>
 
 /* DVB Card Drivers */
 #include <linux/dvb/version.h>
@@ -613,7 +614,13 @@ static int FrontendDoDiseqc(void)
             case 13: pol = 0; break;
             case 18: pol = 1; break;
         }
-
+	if ( ioctl( i_frontend, FE_SET_VOLTAGE, SEC_VOLTAGE_18 ) < 0 )
+        {
+            msg_Err( NULL, "FE_SET_VOLTAGE failed (%s)", strerror(errno) );
+            exit(1);
+        }
+         /* Wait for at least 15 ms. Currently 100 ms because of broken drivers. */
+    msleep(100000);
         /* check if the needed variables are set */
         if ( !i_unicable_vers || !i_userband )
         {
@@ -641,7 +648,8 @@ static int FrontendDoDiseqc(void)
             /* version 2 (EN50607)*/
             struct dvb_diseqc_master_cmd odu_channel_change =
                 { {0x70, 0x00, 0x00, 0x00 }, 4};
-            int tuning_word = ( ( bis_frequency - 100000 ) / 1000 );
+                
+            int tuning_word = round((double)bis_frequency / 1000) - 100;
             
             // D1
             odu_channel_change.msg[1] |= (i_userband_id & 0x1f) << 3;
@@ -725,6 +733,8 @@ static int FrontendDoDiseqc(void)
             msg_Err( NULL, "FE_SET_VOLTAGE failed (%s)", strerror(errno) );
             exit(1);
         }
+            msleep(100000);
+
         return target_frequency;
     }
 
@@ -1470,6 +1480,10 @@ static void FrontendSet( bool b_init )
         if ( ioctl( i_frontend, FE_GET_EVENT, &event ) < 0
               && errno == EWOULDBLOCK )
             break;
+    }
+    
+    for (int i = 0; i < p->num; i++) {
+        msg_Dbg(NULL, "fe cmd %02u %u", p->props[i].cmd, p->props[i].u.data);
     }
 
     /* Now send it all to the frontend device */
