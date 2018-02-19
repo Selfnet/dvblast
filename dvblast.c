@@ -1326,9 +1326,6 @@ int main( int i_argc, char **pp_argv )
     if ( psz_srv_socket != NULL )
         comm_Open();
 
-    if ( b_enable_sap )
-        sap_Announce();
-
     if ( i_quit_timeout_duration )
     {
         ev_timer_init(&quit_watcher, quit_cb,

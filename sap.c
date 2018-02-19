@@ -41,6 +41,7 @@
 #include <arpa/inet.h>
 #include <locale.h>
 #include <errno.h>
+#include <ev.h>
 
 #include <bitstream/dvb/si/sdt.h>
 #include <bitstream/dvb/si/eit.h>
@@ -67,6 +68,8 @@ static int i_next_output = 0;
 static struct sockaddr_in  addr4;
 static struct sockaddr_in6 addr6;
 static const char *psz_dvb_charset = "UTF-8";
+
+ev_timer sap_timer;
 
 /* Checks if the UTF-8 character pointed to by chr is a DVB control code
  * as defined by EN 300 468 Annex A.1. */
@@ -156,6 +159,12 @@ static size_t dvb_string_convert_copy( char *dest, size_t dest_max_len,
     return len;
 }
 
+
+static void SapCb( struct ev_loop *loop, struct ev_timer *w, int revents ) {
+    sap_Announce();
+    ev_timer_again(loop, w);
+}
+
 void sap_Init(void)
 {
     /* required for mblen() */
@@ -181,6 +190,10 @@ void sap_Init(void)
 
     /* setting starttime */
     sap_time = i_wallclock;
+    
+    ev_timer_init (&sap_timer, SapCb, 5, 5);
+    ev_timer_start (event_loop, &sap_timer);
+
 }
 
 void sap_Announce(void)
@@ -188,6 +201,7 @@ void sap_Announce(void)
     /* no output, so no announcements */
     if ( i_nb_outputs <= 0 ) return;
 
+#if 0
     /* See if we need to send the announcements */
     if ( i_wallclock < sap_time ) return;
 
@@ -204,7 +218,7 @@ void sap_Announce(void)
        sap_time = i_wallclock;
     }
     sap_time += g_sap_interval*1000000ll/i_nb_outputs;
-
+#endif
     /* switching to the next output stream */
     if ( ++i_next_output >= i_nb_outputs ) i_next_output = 0;
     output_t *p_output = pp_outputs[i_next_output];
