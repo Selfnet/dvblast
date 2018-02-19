@@ -50,6 +50,7 @@
 #include <bitstream/ietf/rtp.h>
 
 #include "mrtg-cnt.h"
+#include "sap.h"
 
 #include "sap.h"
 
@@ -1067,7 +1068,7 @@ int main( int i_argc, char **pp_argv )
         case 'Y':
             b_enable_ecm = true;
             break;
- 
+
         case 'e':
             b_epg_global = true;
             break;
