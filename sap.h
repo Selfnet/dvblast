@@ -43,7 +43,6 @@ extern struct in6_addr g_sap_ip6_dest;
 #define SAP_DPORT 9875
 
 void sap_Init(void);
-void sap_Announce(void);
 void sap_Close(void);
 
 #endif
