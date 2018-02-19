@@ -162,7 +162,6 @@ static size_t dvb_string_convert_copy( char *dest, size_t dest_max_len,
 
 static void SapCb( struct ev_loop *loop, struct ev_timer *w, int revents ) {
     sap_Announce();
-    ev_timer_again(loop, w);
 }
 
 void sap_Init(void)
