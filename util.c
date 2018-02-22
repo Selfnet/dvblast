@@ -351,7 +351,7 @@ void hexDump( uint8_t *p_data, uint32_t i_len )
     char *p_outline;
     char *p_hrdata;
 
-    p_outline = malloc(69);
+    p_outline = malloc(70);
     p_hrdata  = malloc(17);
 
     for( i = 0; i < i_len; i += 16 )
@@ -383,6 +383,7 @@ void hexDump( uint8_t *p_data, uint32_t i_len )
         }
 
         sprintf( &p_outline[53], "%16s", p_hrdata );
+        p_outline[69] = 0;
         msg_Dbg( NULL, "%s", p_outline );
     }
 

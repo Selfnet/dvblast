@@ -17,7 +17,7 @@ CFLAGS += -DVERSION_EXTRA=\"release\"
 endif
 
 ifeq ($(uname_S),Linux)
-LDLIBS += -lrt
+LDLIBS += -lrt -lm
 endif
 ifeq ($(uname_S),Darwin)
 LDLIBS += -liconv

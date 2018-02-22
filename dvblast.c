@@ -50,6 +50,7 @@
 #include <bitstream/ietf/rtp.h>
 
 #include "mrtg-cnt.h"
+#include "sap.h"
 
 #include "sap.h"
 
@@ -674,10 +675,10 @@ void usage()
     msg_Raw( NULL, "  -s --symbol-rate" );
     msg_Raw( NULL, "  -S --diseqc           satellite number for diseqc (0: no diseqc, 1-4, A or B)" );
     msg_Raw( NULL, "  -k --uncommitted      port number for uncommitted DiSEqC switch (0: no uncommitted DiSEqC switch, 1-16)" );
-    msg_Raw( NULL, "  --unicable            enable unicable support (EN50494 and EN50607)" );
-    msg_Raw( NULL, "  --unicable-vers       sets unicable version (1.2, if no input version 1 is assumed)" );
-    msg_Raw( NULL, "  --unicable-id         unicable channel id" );
-    msg_Raw( NULL, "  --unicable-freq       the corresponding unicable channel center frequency in kHz" );
+    msg_Raw( NULL, "     --unicable            enable unicable support (EN50494 and EN50607)" );
+    msg_Raw( NULL, "     --unicable-vers       sets unicable version (1.2, if no input version 1 is assumed)" );
+    msg_Raw( NULL, "     --unicable-id         unicable channel id" );
+    msg_Raw( NULL, "     --unicable-freq       the corresponding unicable channel center frequency in kHz" );
     msg_Raw( NULL, "  -u --budget-mode      turn on budget mode (no hardware PID filtering)" );
     msg_Raw( NULL, "  -v --voltage          voltage to apply to the LNB (QPSK)" );
     msg_Raw( NULL, "  -w --select-pmts      set a PID filter on all PMTs (auto on, when config file is used)" );
@@ -811,14 +812,14 @@ int main( int i_argc, char **pp_argv )
         { "ca-number",       required_argument, NULL, 'y' },
         { "pidmap",          required_argument, NULL, '0' },
         { "dvr-buf-size",    required_argument, NULL, '2' },
+        { "sap",             no_argument,       &b_enable_sap, 1 },
+        { "sap-ip4",         required_argument, NULL,  1001 },
+        { "sap-ip6",         required_argument, NULL,  1002 },
+        { "sap-interval",    required_argument, NULL,  1003 },
         { "unicable",        no_argument,       NULL, 1004 },
         { "unicable-vers",   required_argument, NULL, 1005 },
         { "unicable-id",     required_argument, NULL, 1006 },
         { "unicable-freq",   required_argument, NULL, 1007 },
-        { "sap",                no_argument,       &b_enable_sap, 1 },
-        { "sap-ip4",            required_argument, NULL,  1001 },
-        { "sap-ip6",            required_argument, NULL,  1002 },
-        { "sap-interval",       required_argument, NULL,  1003 },
         { 0, 0, 0, 0 }
     };
     int option_index = 0;
@@ -1067,7 +1068,7 @@ int main( int i_argc, char **pp_argv )
         case 'Y':
             b_enable_ecm = true;
             break;
- 
+
         case 'e':
             b_epg_global = true;
             break;
@@ -1210,8 +1211,16 @@ int main( int i_argc, char **pp_argv )
         
         case 1006: // unicable band id
             i_userband_id = atoi(optarg);
-            if ( i_userband_id < 0 || i_userband_id > 8 )
-                i_userband_id = 0;
+            if ( i_unicable_vers > 2 )
+            {
+                if ( i_userband_id < 0 || i_userband_id > 31 )
+                    i_userband_id = 0;
+            }
+            else
+            {
+                if ( i_userband_id < 0 || i_userband_id > 7 )                
+                    i_userband_id = 0;
+            }
             break;
 
         case 1007: // unicable band center frequency
@@ -1324,9 +1333,6 @@ int main( int i_argc, char **pp_argv )
 
     if ( psz_srv_socket != NULL )
         comm_Open();
-
-    if ( b_enable_sap )
-        sap_Announce();
 
     if ( i_quit_timeout_duration )
     {

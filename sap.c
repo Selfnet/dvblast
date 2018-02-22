@@ -41,6 +41,7 @@
 #include <arpa/inet.h>
 #include <locale.h>
 #include <errno.h>
+#include <ev.h>
 
 #include <bitstream/dvb/si/sdt.h>
 #include <bitstream/dvb/si/eit.h>
@@ -59,13 +60,13 @@ unsigned int g_sap_interval = 1;
 in_addr_t  g_sap_ip4_dest = -1;
 struct in6_addr g_sap_ip6_dest = { .s6_addr = { 0 } };
 
-/* Reporting timer */
-static mtime_t sap_time = 0;
-
 static int i_sap_handle;
 static int i_next_output = 0;
 static struct sockaddr_in  addr4;
 static struct sockaddr_in6 addr6;
+static const char *psz_dvb_charset = "UTF-8";
+
+ev_timer sap_timer;
 
 /* Checks if the UTF-8 character pointed to by chr is a DVB control code
  * as defined by EN 300 468 Annex A.1. */
@@ -121,7 +122,7 @@ static size_t dvb_string_strip_control_codes( char *str, size_t size )
 }
 
 /* Converts a DVB string into native encoding and returns its new size. */
-static size_t dvb_string_copy( char *dest, size_t dest_max_len,
+static size_t dvb_string_convert_copy( char *dest, size_t dest_max_len,
                                const uint8_t *src, size_t src_len )
 {
     if ( !src_len || !dest_max_len )
@@ -155,6 +156,12 @@ static size_t dvb_string_copy( char *dest, size_t dest_max_len,
     return len;
 }
 
+static void sap_Announce(void);
+
+static void SapCb( struct ev_loop *loop, struct ev_timer *w, int revents ) {
+    sap_Announce();
+}
+
 void sap_Init(void)
 {
     /* required for mblen() */
@@ -178,31 +185,15 @@ void sap_Init(void)
     addr6.sin6_port = htons(SAP_DPORT);
     addr6.sin6_family = AF_INET6;
 
-    /* setting starttime */
-    sap_time = i_wallclock;
+    ev_timer_init (&sap_timer, SapCb, g_sap_interval, g_sap_interval);
+    ev_timer_start (event_loop, &sap_timer);
+
 }
 
-void sap_Announce(void)
+static void sap_Announce(void)
 {
     /* no output, so no announcements */
     if ( i_nb_outputs <= 0 ) return;
-
-    /* See if we need to send the announcements */
-    if ( i_wallclock < sap_time ) return;
-
-    /* Set the timer for next time
-     *
-     * Normally we add the interval to the previous time so that if one
-     * dump is a bit late, the next one still occurs at the correct time.
-     * However, if there is a long gap (e.g. because the channel has
-     * stopped for some time), then just rebase the timing to the current
-     * time.  I've chosen SAP_INTERVAL as the long gap - this is arbitary */
-    if ( i_wallclock > sap_time + g_sap_interval * 1000000ll )
-    {
-       msg_Dbg(NULL, "SAP is %ld seconds late - reset timing\n", (i_wallclock - sap_time) / 1000000);
-       sap_time = i_wallclock;
-    }
-    sap_time += g_sap_interval*1000000ll/i_nb_outputs;
 
     /* switching to the next output stream */
     if ( ++i_next_output >= i_nb_outputs ) i_next_output = 0;
@@ -344,17 +335,17 @@ void sap_Announce(void)
                        "v=0\r\n"
                        "o=- %d 1 IN %s %s\r\n"
                        "s=", i_sid, i_fam == AF_INET6 ? "IP6" : "IP4", psz_fqdn);
-    worker += dvb_string_copy(worker, worker_end-worker, p_service, i_service_len);
+    worker += dvb_string_convert_copy(worker, worker_end-worker, p_service, i_service_len);
     if ( i_event_len )
     {
         worker += snprintf(worker, worker_end-worker, " [");
-        worker += dvb_string_copy(worker, worker_end-worker, p_event, i_event_len);
+        worker += dvb_string_convert_copy(worker, worker_end-worker, p_event, i_event_len);
         worker += snprintf(worker, worker_end-worker, "]");
     }
     worker += snprintf(worker, worker_end-worker,
                        "\r\n"
                        "i=");
-    worker += dvb_string_copy(worker, worker_end-worker, p_text, i_text_len);
+    worker += dvb_string_convert_copy(worker, worker_end-worker, p_text, i_text_len);
     worker += snprintf(worker, worker_end-worker,
                        "\r\n"
                        "u=http://www.videolan.org/projects/dvblast.html\r\n");
@@ -403,6 +394,7 @@ void sap_Announce(void)
 
 void sap_Close(void)
 {
+    ev_timer_stop(event_loop, &sap_timer);
     if ( i_sap_handle >= 0 )
 	close( i_sap_handle );
 }
