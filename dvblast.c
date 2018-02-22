@@ -1212,11 +1212,15 @@ int main( int i_argc, char **pp_argv )
         case 1006: // unicable band id
             i_userband_id = atoi(optarg);
             if ( i_unicable_vers > 2 )
+            {
                 if ( i_userband_id < 0 || i_userband_id > 31 )
                     i_userband_id = 0;
+            }
             else
+            {
                 if ( i_userband_id < 0 || i_userband_id > 7 )                
                     i_userband_id = 0;
+            }
             break;
 
         case 1007: // unicable band center frequency
