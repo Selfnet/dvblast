@@ -675,10 +675,10 @@ void usage()
     msg_Raw( NULL, "  -s --symbol-rate" );
     msg_Raw( NULL, "  -S --diseqc           satellite number for diseqc (0: no diseqc, 1-4, A or B)" );
     msg_Raw( NULL, "  -k --uncommitted      port number for uncommitted DiSEqC switch (0: no uncommitted DiSEqC switch, 1-16)" );
-    msg_Raw( NULL, "     --unicable            enable unicable support (EN50494 and EN50607)" );
-    msg_Raw( NULL, "     --unicable-vers       sets unicable version (1.2, if no input version 1 is assumed)" );
-    msg_Raw( NULL, "     --unicable-id         unicable channel id" );
-    msg_Raw( NULL, "     --unicable-freq       the corresponding unicable channel center frequency in kHz" );
+    msg_Raw( NULL, "     --unicable         Enable unicable support (EN50494 and EN50607)" );
+    msg_Raw( NULL, "     --unicable-vers    Sets unicable version (1/2; If no input is detected, version 1 is assumed)" );
+    msg_Raw( NULL, "     --unicable-id      Unicable channel id" );
+    msg_Raw( NULL, "     --unicable-freq    The corresponding unicable channel center frequency in kHz" );
     msg_Raw( NULL, "  -u --budget-mode      turn on budget mode (no hardware PID filtering)" );
     msg_Raw( NULL, "  -v --voltage          voltage to apply to the LNB (QPSK)" );
     msg_Raw( NULL, "  -w --select-pmts      set a PID filter on all PMTs (auto on, when config file is used)" );
