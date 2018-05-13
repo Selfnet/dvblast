@@ -40,6 +40,7 @@
 #include <arpa/inet.h>
 #include <poll.h>
 #include <errno.h>
+#include <math.h>
 
 /* DVB Card Drivers */
 #include <linux/dvb/version.h>
@@ -459,6 +460,7 @@ static int FrontendDoDiseqc(void)
     fe_sec_voltage_t fe_voltage;
     fe_sec_tone_mode_t fe_tone;
     int bis_frequency;
+    int target_frequency;
 
     switch ( i_voltage )
     {
@@ -612,7 +614,13 @@ static int FrontendDoDiseqc(void)
             case 13: pol = 0; break;
             case 18: pol = 1; break;
         }
-
+	if ( ioctl( i_frontend, FE_SET_VOLTAGE, SEC_VOLTAGE_18 ) < 0 )
+        {
+            msg_Err( NULL, "FE_SET_VOLTAGE failed (%s)", strerror(errno) );
+            exit(1);
+        }
+         /* Wait for at least 15 ms. Currently 100 ms because of broken drivers. */
+    msleep(100000);
         /* check if the needed variables are set */
         if ( !i_unicable_vers || !i_userband )
         {
@@ -640,7 +648,8 @@ static int FrontendDoDiseqc(void)
             /* version 2 (EN50607)*/
             struct dvb_diseqc_master_cmd odu_channel_change =
                 { {0x70, 0x00, 0x00, 0x00 }, 4};
-            int tuning_word = ( ( bis_frequency - 100000 ) / 1000 );
+                
+            int tuning_word = round((double)bis_frequency / 1000) - 100;
             
             // D1
             odu_channel_change.msg[1] |= (i_userband_id & 0x1f) << 3;
@@ -668,13 +677,14 @@ static int FrontendDoDiseqc(void)
             msg_Dbg(NULL,"band: %d",!fe_tone);
 
             msg_Dbg( NULL, "userband=%d userband_id=%d fe_voltage=%d bis_frequency=%d", i_userband, i_userband_id, fe_voltage, bis_frequency );
-            msg_Dbg( NULL, "bis_frequency=%d tuningword=%d", bis_frequency, tuning_word);
-            msg_Dbg( NULL, "D1=%d D2=%d D3=%d D4=%d", odu_channel_change.msg[1], odu_channel_change.msg[2], odu_channel_change.msg[3], odu_channel_change.msg[4]);
+            msg_Dbg( NULL, "bis_frequency=%d tuningword=%x", bis_frequency, tuning_word);
+            msg_Dbg( NULL, "satnum=%i", i_satnum);
+            msg_Dbg( NULL, "D1=%x D2=%x D3=%x D4=%x", odu_channel_change.msg[1], odu_channel_change.msg[2], odu_channel_change.msg[3], odu_channel_change.msg[4]);
 
             // no offset needed
-            i_frequency = i_userband;
+            target_frequency = i_userband;
 
-            msleep(100000);
+            msleep(200000);
             
         } 
         else 
@@ -682,7 +692,7 @@ static int FrontendDoDiseqc(void)
             /* assume version 1 (EN50494)*/
             /* create struct for channel switch*/
             struct dvb_diseqc_master_cmd odu_channel_change =
-                { {0xe0, 0x00, 0x5a, 0x00, 0x00}, 5};
+                { {0xe0, 0x10, 0x5a, 0x00, 0x00}, 5};
 
             //calculate goal frequency
             int i_goal = bis_frequency + i_userband;
@@ -690,13 +700,14 @@ static int FrontendDoDiseqc(void)
             //calculate tuning_word
             int tuning_word = i_goal / 4000.0 - 350.0 + 0.5;
             
-            // D3
+            // D1
             odu_channel_change.msg[3] |= (i_userband_id & 0x3) << 5;
+            odu_channel_change.msg[3] |= i_satnum << 4;
             odu_channel_change.msg[3] |= fe_voltage << 3;
             odu_channel_change.msg[3] |= !fe_tone << 2;
             odu_channel_change.msg[3] |= tuning_word >> 8;
             
-            // D4
+            // D2
             odu_channel_change.msg[4] |= tuning_word & 0xFF;
 
             // Send Command
@@ -711,12 +722,14 @@ static int FrontendDoDiseqc(void)
             int i_offset = i_real - i_goal;
             
             // set tuning frequency
-            i_frequency = i_userband + i_offset;
+            target_frequency = i_userband + i_offset;
                 
             msg_Dbg( NULL, "userband=%d userband_id=%d fe_voltage=%d bis_frequency=%d", i_userband, i_userband_id, fe_voltage, bis_frequency );
-            msg_Dbg( NULL, "i_goal=%d tuning_word=%d fe_tone=%d i_real=%d i_offset=%d i_frequency=%d ", i_goal, tuning_word, fe_tone, i_real, i_offset, i_frequency );
+            msg_Dbg( NULL, "i_goal=%d tuning_word=%x fe_tone=%d i_real=%d i_offset=%d target_frequency=%d ", i_goal, tuning_word, fe_tone, i_real, i_offset, target_frequency );
+            msg_Dbg( NULL, "i_satnum=%d", i_satnum);
+            msg_Dbg( NULL, "D1=%d D2=%d", odu_channel_change.msg[3], odu_channel_change.msg[4]);
 
-            msleep(100000);
+            msleep(200000);
         }
 
         if ( ioctl( i_frontend, FE_SET_VOLTAGE, SEC_VOLTAGE_13 ) < 0 )
@@ -724,7 +737,9 @@ static int FrontendDoDiseqc(void)
             msg_Err( NULL, "FE_SET_VOLTAGE failed (%s)", strerror(errno) );
             exit(1);
         }
-        return i_frequency;
+            msleep(100000);
+
+        return target_frequency;
     }
 
 
@@ -1414,6 +1429,7 @@ static void FrontendSet( bool b_init )
         p->props[INVERSION].u.data = GetInversion();
         p->props[SYMBOL_RATE].u.data = i_srate;
         p->props[FEC_INNER].u.data = GetFECInner(info.caps);
+        msg_Dbg(NULL, "Freq = %d, ifreq=%d", p->props[FREQUENCY].u.data,i_frequency);
         p->props[FREQUENCY].u.data = FrontendDoDiseqc();
 
         msg_Dbg( NULL, "tuning DVB-S frontend to f=%d srate=%d inversion=%d fec=%d rolloff=%d modulation=%s pilot=%d mis=%d",
@@ -1468,6 +1484,10 @@ static void FrontendSet( bool b_init )
         if ( ioctl( i_frontend, FE_GET_EVENT, &event ) < 0
               && errno == EWOULDBLOCK )
             break;
+    }
+    
+    for (int i = 0; i < p->num; i++) {
+        msg_Dbg(NULL, "fe cmd %02u %u", p->props[i].cmd, p->props[i].u.data);
     }
 
     /* Now send it all to the frontend device */

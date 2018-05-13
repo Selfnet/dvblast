@@ -1,0 +1,778 @@
+DIFF from tilka git
+
+diff --git a/AUTHORS b/AUTHORS
+index c1d2df2..a26ef43 100644
+--- a/AUTHORS
++++ b/AUTHORS
+@@ -28,6 +28,10 @@ N: Peter Partin
+ E: peter DOT martin AT tripleplay DASH servies DOT com
+ D: ATSC, MRTG, PID remap
+ 
++N: Simon Lockhart
++E: simon AT slimey DOT org
++D: Deltacast ASI card support
++
+ N: Christophe Massiot
+ E: massiot AT via DOT ecp DOT fr
+ C: massiot
+@@ -38,6 +42,7 @@ E: jpsaman AT videolan DOT org
+ C: jpsaman
+ D: DVB-S2 bug fixes, syslog support
+ 
+-N: Simon Lockhart
+-E: simon AT slimey DOT org
+-D: Deltacast ASI card support
++N: Selfnet e.V. (Tillmann Karras, Markus Wick, Dirk Braunschweiger)
++E: admin AT selfnet DOT de
++W: www.selfnet.de
++D: SAP support
+diff --git a/Makefile b/Makefile
+index 3b6775c..73b7261 100644
+--- a/Makefile
++++ b/Makefile
+@@ -30,7 +30,7 @@ endif
+ 
+ LDLIBS_DVBLAST += -lpthread
+ 
+-OBJ_DVBLAST = dvblast.o util.o dvb.o udp.o asi.o demux.o output.o en50221.o comm.o mrtg-cnt.o asi-deltacast.o
++OBJ_DVBLAST = dvblast.o util.o dvb.o udp.o asi.o demux.o output.o en50221.o comm.o mrtg-cnt.o asi-deltacast.o sap.o
+ OBJ_DVBLASTCTL = util.o dvblastctl.o
+ 
+ ifndef V
+@@ -49,7 +49,7 @@ all: dvblast dvblastctl
+ 
+ .PHONY: clean install uninstall dist
+ 
+-%.o: %.c Makefile config.h dvblast.h en50221.h comm.h asi.h mrtg-cnt.h asi-deltacast.h
++%.o: %.c Makefile config.h dvblast.h en50221.h comm.h asi.h mrtg-cnt.h asi-deltacast.h sap.h
+ 	@echo "CC      $<"
+ 	$(Q)$(CROSS)$(CC) $(CFLAGS) $(CPPFLAGS) -c $<
+ 
+diff --git a/NEWS b/NEWS
+index 76a6d5f..282cf0e 100644
+--- a/NEWS
++++ b/NEWS
+@@ -10,6 +10,7 @@ Changes between 2.2 and 2.3:
+   * Added support for multi-delivery system frontends.
+   * Added support for multistream that appeared in Linux 3.6
+   * Added support for Deltacast ASI cards
++  * Added support for SAP announcements generated from SDT.
+ 
+ Changes between 2.1 and 2.2:
+ ----------------------------
+diff --git a/bitstream_patch.h b/bitstream_patch.h
+new file mode 100644
+index 0000000..9446690
+--- /dev/null
++++ b/bitstream_patch.h
+@@ -0,0 +1,4 @@
++static inline void psi_copy(uint8_t *pp_dest, uint8_t *pp_src)
++{
++     memcpy(pp_dest, pp_src, (PSI_MAX_SIZE + PSI_HEADER_SIZE) * sizeof(uint8_t));
++}
+diff --git a/demux.c b/demux.c
+index b786515..a349d34 100644
+--- a/demux.c
++++ b/demux.c
+@@ -47,6 +47,7 @@
+ #include <bitstream/dvb/si.h>
+ #include <bitstream/dvb/si_print.h>
+ #include <bitstream/mpeg/psi_print.h>
++#include "bitstream_patch.h"
+ 
+ extern bool b_enable_emm;
+ extern bool b_enable_ecm;
+@@ -1174,6 +1175,19 @@ static void SendEIT( sid_t *p_sid, mtime_t i_dts, uint8_t *p_eit )
+ 
+             psi_set_crc( p_eit );
+ 
++            int j = 0;
++            uint8_t *p_eit_n;
++            while(( p_eit_n = eit_get_event(p_eit,j++)) != NULL )
++            {
++                if ( eitn_get_running( p_eit_n ) == 4 )
++                {
++                    free( p_output->p_eit_epg_section );
++                    p_output->p_eit_epg_section = psi_allocate();
++                    psi_copy( p_output->p_eit_epg_section, p_eit );
++                    break;
++                }
++            }
++
+             OutputPSISection( p_output, p_eit, EIT_PID, &p_output->i_eit_cc,
+                               i_dts, &p_output->p_eit_ts_buffer,
+                               &p_output->i_eit_ts_buffer_offset );
+diff --git a/dvblast.1 b/dvblast.1
+index 6dbb0f7..33b741d 100644
+--- a/dvblast.1
++++ b/dvblast.1
+@@ -178,6 +178,18 @@ Symbole rate
+ \fB\-S\fR, \fB\-\-diseqc\fR <diseqc>
+ Satellite number for diseqc (0: no diseqc, 1\-4, A or B)
+ .TP
++\fB--sap\fR
++Announce streams via SAP/SDP
++.TP
++\fB--sap-ip4 <ip>\fB
++Multicast IPv4 address for SAP announcements (default: 239.195.255.255)
++.TP
++\fB--sap-ip6 <ip>\fB
++Multicast IPv6 address for SAP announcements (default: ff08::2:7ffe)
++.TP
++\fB--sap-interval <secs>\fB
++Time interval between announcements per stream (default: 1)
++.TP
+ \fB\-t\fR, \fB\-\-ttl\fR <ttl>
+ Time-To-Live of the multicast stream
+ .TP
+diff --git a/dvblast.c b/dvblast.c
+index ebd4992..36f631b 100644
+--- a/dvblast.c
++++ b/dvblast.c
+@@ -48,6 +48,7 @@
+ #include <bitstream/ietf/rtp.h>
+ 
+ #include "mrtg-cnt.h"
++#include "sap.h"
+ 
+ /*****************************************************************************
+  * Local declarations
+@@ -104,6 +105,8 @@ int i_verbose = DEFAULT_VERBOSITY;
+ int i_syslog = 0;
+ char *psz_syslog_ident = NULL;
+ 
++int b_enable_sap = 0;
++
+ bool b_enable_emm = false;
+ bool b_enable_ecm = false;
+ 
+@@ -572,6 +575,10 @@ void usage()
+     msg_Raw( NULL, "  -q --quiet            be quiet (less verbosity, repeat or use number for even quieter)" );
+     msg_Raw( NULL, "  -Q --quit-timeout     when locked, quit after this delay (in ms), or after the first lock timeout" );
+     msg_Raw( NULL, "  -r --remote-socket <remote socket>" );
++    msg_Raw( NULL, "     --sap              announce streams via SAP/SDP");
++    msg_Raw( NULL, "     --sap-ip4 <ip4>    multicast IPv4 address for SAP announcements (default: %s)", SAP_DEFAULT_IP4_ADDR);
++    msg_Raw( NULL, "     --sap-ip6 <ip6>    multicast IPv6 address for SAP announcements (default: %s)", SAP_DEFAULT_IP6_ADDR);
++    msg_Raw( NULL, "     --sap-interval <secs> time interval between announcements per stream (default 1)");
+     msg_Raw( NULL, "  -V --version          only display the version" );
+     msg_Raw( NULL, "  -Z --mrtg-file <file> Log input packets and errors into mrtg-file" );
+     exit(1);
+@@ -657,10 +664,15 @@ int main( int i_argc, char **pp_argv )
+         { "ca-number",       required_argument, NULL, 'y' },
+         { "pidmap",          required_argument, NULL, '0' },
+         { "dvr-buf-size",    required_argument, NULL, '2' },
++        { "sap",             no_argument,       &b_enable_sap, 1 },
++        { "sap-ip4",         required_argument, NULL,  1001 },
++        { "sap-ip6",         required_argument, NULL,  1002 },
++        { "sap-interval",    required_argument, NULL,  1003 },
+         { 0, 0, 0, 0 }
+     };
+ 
+-    while ( (c = getopt_long(i_argc, pp_argv, "q::c:r:t:o:i:a:n:5:f:F:R:s:S:k:v:pb:I:m:P:K:G:H:X:O:uwUTL:E:d:D:A:lg:zCWYeM:N:j:J:B:x:Q:hVZ:y:0:1:2:", long_options, NULL)) != -1 )
++    int option_index = 0;
++    while ( (c = getopt_long(i_argc, pp_argv, "q::c:r:t:o:i:a:n:5:f:F:R:s:S:k:v:pb:I:m:P:K:G:H:X:O:uwUTL:E:d:D:A:lg:zCWYeM:N:j:J:B:x:Q:hVZ:y:0:1:2:", long_options, &option_index)) != -1 )
+     {
+         switch ( c )
+         {
+@@ -902,7 +914,7 @@ int main( int i_argc, char **pp_argv )
+         case 'Y':
+             b_enable_ecm = true;
+             break;
+- 
++
+         case 'e':
+             b_epg_global = true;
+             break;
+@@ -1000,9 +1012,40 @@ int main( int i_argc, char **pp_argv )
+             i_dvr_buffer_size *= TS_SIZE;
+             break;
+ #endif
++
++        case 1001: // sap-ip4
++            if ( inet_pton(AF_INET, optarg, &g_sap_ip4_dest) != 1 )
++            {
++                msg_Err( NULL, "Invalid SAP IPv4 address" );
++                exit(EXIT_FAILURE);
++            }
++            if ( !IN_MULTICAST(ntohl(g_sap_ip4_dest)) )
++                msg_Warn( NULL, "SAP IPv4 address is not a multicast address (using it anyway)" );
++            break;
++
++        case 1002: // sap-ip6
++            if ( inet_pton(AF_INET6, optarg, &g_sap_ip6_dest) != 1 )
++            {
++                msg_Err( NULL, "Invalid SAP IPv6 address" );
++                exit(EXIT_FAILURE);
++            }
++            if ( !IN6_IS_ADDR_MULTICAST( &g_sap_ip6_dest ) )
++                msg_Warn( NULL, "SAP IPv6 address is not a multicast address (using it anyway)" );
++            break;
++
++        case 1003: // sap-interval
++            g_sap_interval = atoi(optarg);
++            if ( g_sap_interval < 1 )
++                g_sap_interval = 1;
++            break;
++
+         case 'h':
+-        default:
+             usage();
++            break;
++
++        default:
++            if ( !option_index )
++                usage();
+         }
+     }
+     if ( optind < i_argc || pf_Open == NULL )
+@@ -1015,7 +1058,7 @@ int main( int i_argc, char **pp_argv )
+         DisplayVersion();
+ 
+     msg_Warn( NULL, "restarting" );
+-    switch (i_print_type) 
++    switch (i_print_type)
+     {
+         case PRINT_XML:
+             printf("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n");
+@@ -1123,6 +1166,9 @@ int main( int i_argc, char **pp_argv )
+ 
+     config_ReadFile( psz_conf_file );
+ 
++    if ( b_enable_sap )
++        sap_Init();
++
+     if ( psz_srv_socket != NULL )
+         comm_Open();
+ 
+@@ -1143,6 +1189,9 @@ int main( int i_argc, char **pp_argv )
+             config_ReadFile( psz_conf_file );
+         }
+ 
++        if ( b_enable_sap )
++            sap_Announce();
++
+         if ( i_quit_timeout && i_quit_timeout <= i_wallclock )
+         {
+             switch (i_print_type)
+@@ -1172,6 +1221,9 @@ int main( int i_argc, char **pp_argv )
+     demux_Close();
+     free( p_network_name );
+ 
++    if ( b_enable_sap )
++        sap_Close();
++
+     if ( b_enable_syslog )
+         msg_Disconnect();
+ 
+diff --git a/dvblast.h b/dvblast.h
+index 7cd981d..088cc8e 100644
+--- a/dvblast.h
++++ b/dvblast.h
+@@ -162,6 +162,7 @@ typedef struct output_t
+     uint8_t i_nit_version, i_nit_cc;
+     uint8_t *p_sdt_section;
+     uint8_t i_sdt_version, i_sdt_cc;
++    uint8_t *p_eit_epg_section;
+     block_t *p_eit_ts_buffer;
+     uint8_t i_eit_ts_buffer_offset, i_eit_cc;
+     uint16_t i_tsid;
+diff --git a/output.c b/output.c
+index 1605425..4fcaa62 100644
+--- a/output.c
++++ b/output.c
+@@ -185,6 +185,7 @@ int output_Init( output_t *p_output, const output_config_t *p_config )
+     p_output->p_pmt_section = NULL;
+     p_output->p_nit_section = NULL;
+     p_output->p_sdt_section = NULL;
++    p_output->p_eit_epg_section = NULL;
+     p_output->p_eit_ts_buffer = NULL;
+     if ( b_random_tsid )
+         p_output->i_tsid = rand() & 0xffff;
+@@ -216,9 +217,9 @@ int output_Init( output_t *p_output, const output_config_t *p_config )
+     int ret = 0;
+     if ( p_config->bind_addr.ss_family != AF_UNSPEC )
+     {
+-        if ( bind( p_output->i_handle, (struct sockaddr *)&p_config->bind_addr,
+-                   i_sockaddr_len ) < 0 )
+-            msg_Warn( NULL, "couldn't bind socket (%s)", strerror(errno) );
++//        if ( bind( p_output->i_handle, (struct sockaddr *)&p_config->bind_addr,
++//                   i_sockaddr_len ) < 0 )
++//            msg_Warn( NULL, "couldn't bind socket (%s)", strerror(errno) );
+ 
+         if ( p_config->i_family == AF_INET )
+         {
+@@ -301,6 +302,7 @@ void output_Close( output_t *p_output )
+     free( p_output->p_pmt_section );
+     free( p_output->p_nit_section );
+     free( p_output->p_sdt_section );
++    free( p_output->p_eit_epg_section );
+     free( p_output->p_eit_ts_buffer );
+     p_output->config.i_config &= ~OUTPUT_VALID;
+ 
+diff --git a/sap.c b/sap.c
+new file mode 100644
+index 0000000..9fbe4d4
+--- /dev/null
++++ b/sap.c
+@@ -0,0 +1,407 @@
++/*****************************************************************************
++ * sap.c SAP Announcements generated from SDT
++ *****************************************************************************
++ * Copyright (C) 2012 VideoLAN
++ *
++ * Author:  Dirk Braunschweiger <dirkmb@selfnet.de>
++ *          Markus Wick         <markus@selfnet.de>
++ *          Tillmann Karras     <tillmann@selfnet.de>
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston MA 02110-1301, USA.
++ *****************************************************************************/
++
++#include "config.h"
++
++#include <stdint.h>
++#include <stdlib.h>
++#include <string.h>
++#include <stdio.h>
++#include <stdbool.h>
++#include <sys/types.h>
++
++#include <unistd.h>
++#include <limits.h>
++#include <fcntl.h>
++#include <sys/time.h>
++#include <sys/socket.h>
++#include <netinet/in.h>
++#include <arpa/inet.h>
++#include <locale.h>
++#include <errno.h>
++
++#include <bitstream/dvb/si/sdt.h>
++#include <bitstream/dvb/si/eit.h>
++#include <bitstream/dvb/si/desc_48.h>
++#include <bitstream/dvb/si/desc_4d.h>
++
++#ifdef HAVE_ICONV
++#include <iconv.h>
++#endif
++
++#include "dvblast.h"
++#include "sap.h"
++
++/* SAP config */
++unsigned int g_sap_interval = 1;
++in_addr_t  g_sap_ip4_dest = -1;
++struct in6_addr g_sap_ip6_dest = { .s6_addr = { 0 } };
++
++/* Reporting timer */
++static mtime_t sap_time = 0;
++
++static int i_sap_handle;
++static int i_next_output = 0;
++static struct sockaddr_in  addr4;
++static struct sockaddr_in6 addr6;
++
++/* Checks if the UTF-8 character pointed to by chr is a DVB control code
++ * as defined by EN 300 468 Annex A.1. */
++static inline int dvb_is_control_code( char *chr, int length )
++{
++    /* c2 80-9f  or  ee 82 80-9f */
++    return ( length == 2 && chr[0] == '\xc2' && (chr[1] & 0xe0) == 0x80 ) ||
++           ( length == 3 && chr[0] == '\xee' && chr[1] == '\x82' && (chr[2] & 0xe0) == 0x80 );
++}
++
++/* Strips DVB control codes in-place and returns the new length.
++ * Probably not very efficient and only supports UTF-8. */
++static size_t dvb_string_strip_control_codes( char *str, size_t size )
++{
++    char *src = str, *dst = str;
++    size_t remaining = size;
++
++    if ( strcmp( psz_native_charset, "UTF-8" ) != 0 )
++    {
++        return size;
++    }
++
++    while ( remaining )
++    {
++        int char_length = mblen( src, remaining );
++        if ( char_length == 0 )
++            break;
++        if ( char_length == -1 )
++        {
++            msg_Warn( NULL, "Invalid UTF-8 in DVB string\n" );
++            break;
++        }
++        if ( !dvb_is_control_code( src, char_length ) )
++        {
++            // probably more efficient than memmove()
++            switch ( char_length )
++            {
++            case 4:
++                *dst++ = *src++;
++            case 3:
++                *dst++ = *src++;
++            case 2:
++                *dst++ = *src++;
++            case 1:
++                *dst++ = *src++;
++            }
++        } else {
++            src += char_length;
++        }
++        remaining -= char_length;
++    }
++    return dst - str;
++}
++
++/* Converts a DVB string into native encoding and returns its new size. */
++static size_t dvb_string_copy( char *dest, size_t dest_max_len,
++                               const uint8_t *src, size_t src_len )
++{
++    if ( !src_len || !dest_max_len )
++        return 0;
++
++    char *dest_orig = dest;
++#ifdef HAVE_ICONV
++    const char *psz_encoding = dvb_string_get_encoding(&src, &src_len);
++
++    if ( !psz_encoding )
++        psz_encoding = psz_dvb_charset;
++
++    iconv_t p_iconv = iconv_open(psz_native_charset, psz_encoding);
++
++    size_t p_remain[2] = {src_len, dest_max_len};
++    iconv(p_iconv, (char**)&src, p_remain,
++            &dest, p_remain+1);
++
++    iconv_close(p_iconv);
++
++    size_t len = dest - dest_orig;
++#else
++    size_t len = dest_max_len < src_len ? dest_max_len : src_len;
++    memcpy(dest, src, len);
++#endif
++
++    dest_orig[len] = '\0';
++
++    len = dvb_string_strip_control_codes( dest_orig, len );
++
++    return len;
++}
++
++void sap_Init(void)
++{
++    /* required for mblen() */
++    setlocale (LC_ALL, "");
++
++    if ( g_sap_ip4_dest == -1 )
++        inet_pton(AF_INET, SAP_DEFAULT_IP4_ADDR, &g_sap_ip4_dest);
++
++    if ( g_sap_ip6_dest.s6_addr[0] == 0 )
++        inet_pton(AF_INET6, SAP_DEFAULT_IP6_ADDR, &g_sap_ip6_dest);
++
++    /* IPv4 */
++    memset(&addr4, 0, sizeof(addr4));
++    addr4.sin_addr.s_addr = g_sap_ip4_dest;
++    addr4.sin_port = htons(SAP_DPORT);
++    addr4.sin_family = AF_INET;
++
++    /* IPv6 */
++    memset(&addr6, 0, sizeof(addr6));
++    addr6.sin6_addr = g_sap_ip6_dest;
++    addr6.sin6_port = htons(SAP_DPORT);
++    addr6.sin6_family = AF_INET6;
++
++    /* setting starttime */
++    sap_time = i_wallclock;
++}
++
++void sap_Announce(void)
++{
++    /* no output, so no announcements */
++    if ( i_nb_outputs <= 0 ) return;
++
++    /* See if we need to send the announcements */
++    if ( i_wallclock < sap_time ) return;
++
++    /* Set the timer for next time
++     *
++     * Normally we add the interval to the previous time so that if one
++     * dump is a bit late, the next one still occurs at the correct time.
++     * However, if there is a long gap (e.g. because the channel has
++     * stopped for some time), then just rebase the timing to the current
++     * time.  I've chosen SAP_INTERVAL as the long gap - this is arbitary */
++    if ( i_wallclock > sap_time + g_sap_interval * 1000000ll )
++    {
++       msg_Dbg(NULL, "SAP is %ld seconds late - reset timing\n", (i_wallclock - sap_time) / 1000000);
++       sap_time = i_wallclock;
++    }
++    sap_time += g_sap_interval*1000000ll/i_nb_outputs;
++
++    /* switching to the next output stream */
++    if ( ++i_next_output >= i_nb_outputs ) i_next_output = 0;
++    output_t *p_output = pp_outputs[i_next_output];
++
++    char psz_session_addr[INET6_ADDRSTRLEN] = ""; /* IP of session (i.e. not the SAP stream!) */
++    char psz_session_port[6] = "";                /* port of session */
++    int i_mtu = p_output->config.i_mtu;
++    int i_fam = p_output->config.i_family;
++    struct sockaddr_storage local_addr;
++    socklen_t i_local_addr_len = sizeof(local_addr);
++    char psz_fqdn[NI_MAXHOST] = "";
++    struct addrinfo *ai_list, *ai, hints = { .ai_family = AF_UNSPEC, .ai_socktype = SOCK_DGRAM };
++
++    /* Get multicast group address of the DVB stream to be announced */
++    getnameinfo( (struct sockaddr*) &p_output->config.connect_addr, sizeof(struct sockaddr_storage),
++                 psz_session_addr, sizeof(psz_session_addr),
++                 psz_session_port, sizeof(psz_session_port),
++                 NI_NUMERICHOST | NI_NUMERICSERV );
++
++    /* Get local address of the DVB streaming socket */
++    getsockname( p_output->i_handle, (struct sockaddr*) &local_addr, &i_local_addr_len );
++
++    /* Get local FQDN (or IP as string) */
++    gethostname( psz_fqdn, sizeof(psz_fqdn) );
++    getaddrinfo( psz_fqdn, NULL, &hints, &ai_list );
++    for ( ai = ai_list; ai; ai = ai->ai_next )
++    {
++        if ( !getnameinfo( ai->ai_addr, ai->ai_addrlen, psz_fqdn, sizeof(psz_fqdn), NULL, 0, 0 ) )
++        {
++            /* success */
++            break;
++        }
++    }
++    if ( !ai )
++    {
++        msg_Err( NULL, "Are you even connected to a network?" );
++        exit( EXIT_FAILURE );
++    }
++    freeaddrinfo( ai_list );
++
++    uint16_t i_sid = 0;            /* service id of this stream */
++    const uint8_t *p_service = 0;  /* name of service */
++    uint8_t i_service_len = 0;
++    uint8_t i_service_type = 0;    /* type of service (see ETSI EN 300 468 table 86) */
++    const uint8_t *p_event = 0;    /* name of event */
++    uint8_t i_event_len = 0;
++    const uint8_t *p_text = 0;     /* long description of event */
++    uint8_t i_text_len = 0;
++
++    /* Parsing SDT */
++    int j = 0, k = 0;
++    uint8_t *p_sdt = p_output->p_sdt_section;
++    if ( p_sdt )
++    {
++        uint8_t *sdtn;
++        while ( (sdtn = sdt_get_service( p_sdt, k++ )) != NULL )
++        {
++            i_sid = sdtn_get_sid( sdtn );
++
++            /* searching for 0x48 service descriptor */
++            uint8_t *p_desc;
++            while ( (p_desc = descs_get_desc( sdtn_get_descs( sdtn ), j++ )) != NULL )
++            {
++                if ( desc_get_tag( p_desc ) == 0x48 && desc48_validate( p_desc ) )
++                {
++                    p_service = desc48_get_service( p_desc, &i_service_len );
++                    i_service_type = desc48_get_type( p_desc );
++                }
++            }
++        }
++    } else {
++        msg_Dbg( NULL, "not announcing SAP until we get a SDT" );
++        return;
++    }
++
++    /* Parsing EIT_EPG */
++    j = 0, k = 0;
++    uint8_t *p_eit = p_output->p_eit_epg_section;
++    if ( p_eit )
++    {
++        uint8_t *eitn;
++        while ( (eitn = eit_get_event(p_eit, k++)) != NULL )
++        {
++            uint8_t *p_desc;
++            while ( (p_desc = descs_get_desc( eitn_get_descs(eitn), j++ )) != NULL )
++            {
++                if ( desc_get_tag( p_desc ) == 0x4d && desc4d_validate( p_desc ) )
++                {
++                    p_event = desc4d_get_event_name( p_desc, &i_event_len );
++                    p_text = desc4d_get_text( p_desc, &i_text_len );
++                }
++            }
++        }
++    }
++
++    /* constructing the SAP/SDP package */
++    char buffer[i_mtu];
++    char *worker = buffer;
++    char *worker_end = buffer+i_mtu;
++    int addr_len = i_fam == AF_INET6 ? 16 : 4;
++
++    /* create the SAP header
++     *
++     * Byte 0: V version number v1&v2     = 001      (3 bits)
++     *         A address type   IPv4/IPv6 = 0/1      (1 bit)
++     *         R reserved                 = 0        (1 bit)
++     *         T message type   ann/del   = 0/1      (1 bit)
++     *         E encryption     off/on    = 0/1      (1 bit)
++     *         C compressed     off/on    = 0/1      (1 bit)
++     */
++
++    /*            VVVARTEC  (announces only, not encrypted, not compressed) */
++    worker[0] = 0b00100000;
++    worker[0] |= !!(i_fam == AF_INET6) << 4;
++
++    /* Byte 1 : Authentification length - Not supported */
++    worker[1] = 0x00;
++
++    /* Bytes 2-3 : Message Id Hash */
++    worker[2] = (i_sid>>8) & 0xff;
++    worker[3] = i_sid & 0xff;
++    worker += 4;
++
++    /* Bytes 4-7 (or 4-19) byte: Originating source */
++    if ( i_fam == AF_INET6 )
++        memcpy(worker, &((struct sockaddr_in6*) &local_addr)->sin6_addr, addr_len);
++    else
++        memcpy(worker, &((struct sockaddr_in*) &local_addr)->sin_addr, addr_len);
++    worker += addr_len;
++
++    /* finally MIME type */
++    worker += snprintf(worker, worker_end-worker, "application/sdp");
++    worker[0] = 0;
++    worker++;
++
++    /* and the SDP payload */
++    worker += snprintf(worker, worker_end-worker,
++                       "v=0\r\n"
++                       "o=- %d 1 IN %s %s\r\n"
++                       "s=", i_sid, i_fam == AF_INET6 ? "IP6" : "IP4", psz_fqdn);
++    worker += dvb_string_copy(worker, worker_end-worker, p_service, i_service_len);
++    if ( i_event_len )
++    {
++        worker += snprintf(worker, worker_end-worker, " [");
++        worker += dvb_string_copy(worker, worker_end-worker, p_event, i_event_len);
++        worker += snprintf(worker, worker_end-worker, "]");
++    }
++    worker += snprintf(worker, worker_end-worker,
++                       "\r\n"
++                       "i=");
++    worker += dvb_string_copy(worker, worker_end-worker, p_text, i_text_len);
++    worker += snprintf(worker, worker_end-worker,
++                       "\r\n"
++                       "u=http://www.videolan.org/projects/dvblast.html\r\n");
++    if ( i_fam == AF_INET6 )
++    {
++        worker += snprintf(worker, worker_end-worker,
++                       "c=IN IP6 %s\r\n",
++                       psz_session_addr);
++    }
++    else
++    {
++        worker += snprintf(worker, worker_end-worker,
++                       "c=IN IP4 %s/%d\r\n",
++                       psz_session_addr, p_output->config.i_ttl);
++    }
++    const char *service_type;
++    switch (i_service_type)
++    {
++    case 1:  service_type = "Television"; break;
++    case 2:  service_type = "Radio";      break;
++    default: service_type = "Unknown";    break;
++    }
++    worker += snprintf(worker, worker_end-worker,
++                       "t=0 0\r\n"
++                       "a=tool:dvblast %s (%s)\r\n"
++                       "a=type:broadcast\r\n" /* implies a=recvonly */
++                       "a=charset:%s\r\n"
++                       /* now the media-level: */
++                       "m=video %s RTP/AVP 33\r\n" /* FIXME: other parts of dvblast also support sending raw UDP */
++//                       "i=Media Title\r\n" // maybe put the description here?
++                       "a=cat:%s\r\n"
++//                       "a=rtpmap:33 MP2T/90000\r\n" // we don't need this because 33 is a standardized RTP type
++//                       "a=lang:de\r\n"
++                       , VERSION, VERSION_EXTRA, psz_native_charset, psz_session_port, service_type);
++
++    /* sending this announcement */
++    if ( (i_fam == AF_INET  && sendto( p_output->i_handle, buffer, worker-buffer, 0,
++                (struct sockaddr*) &addr4, sizeof(addr4)) < 0) ||
++         (i_fam == AF_INET6 && sendto( p_output->i_handle, buffer, worker-buffer, 0,
++                (struct sockaddr*) &addr6, sizeof(addr6)) < 0 ))
++    {
++        msg_Err( NULL, "couldn't send to %d (%s)",
++                 i_sap_handle, strerror(errno) );
++    }
++}
++
++void sap_Close(void)
++{
++    if ( i_sap_handle >= 0 )
++	close( i_sap_handle );
++}
+diff --git a/sap.h b/sap.h
+new file mode 100644
+index 0000000..0251fc1
+--- /dev/null
++++ b/sap.h
+@@ -0,0 +1,48 @@
++/*****************************************************************************
++ * sap.h SAP Announcements generated from SDT
++ *****************************************************************************
++ * Copyright (C) 2012 VideoLAN
++ *
++ * Author:  Dirk Braunschweiger <dirkmb@selfnet.de>
++ *          Markus Wick         <markus@selfnet.de>
++ *          Tillmann Karras     <tillmann@selfnet.de>
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston MA 02110-1301, USA.
++ *****************************************************************************/
++
++#ifndef SAP_H
++#define SAP_H
++
++// Define the dump period in seconds
++extern unsigned int g_sap_interval;
++
++/* The IP multicast addresses to be used for SAP announcements.
++ * See RFC 2974 section 3 and RFC 2365 sections 6-7.
++ *
++ * IPv4: always the highest address of the admin scope
++ * IPv6: always ff0x::2:7ffe where x denotes the admin scope
++ */
++extern in_addr_t g_sap_ip4_dest;
++extern struct in6_addr g_sap_ip6_dest;
++
++#define SAP_DEFAULT_IP4_ADDR "239.195.255.255"
++#define SAP_DEFAULT_IP6_ADDR "ff08::2:7ffe"
++#define SAP_DPORT 9875
++
++void sap_Init(void);
++void sap_Announce(void);
++void sap_Close(void);
++
++#endif

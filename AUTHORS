@@ -24,10 +24,13 @@ E: a DOT j DOT gatward AT reading DOT ac DOT uk
 C: gatty
 D: EIT pass-through, IPv6 support, various bug fixes
 
+<<<<<<< HEAD
 N: Tillmann Karras
 E: tillmann.karras AT selfnet DOT de
 D: Unicable Support
 
+=======
+>>>>>>> ecd09d0435e8906b405bb15c64a0c31d95e806ad
 N: Simon Lockhart
 E: simon AT slimey DOT org
 D: Deltacast ASI card support
@@ -37,11 +40,14 @@ E: massiot AT via DOT ecp DOT fr
 C: massiot
 D: Most of the code
 
+<<<<<<< HEAD
 N: Michael Mueller
 E: michael.mueller AT selfnet DOT de
 P: Key: 0x8746E4E1 Fingerprint: 0DE6 4766 E0A4 1469 E294 7FFB E1D8 7394 8746 E4E1
 D: Unicable Support
 
+=======
+>>>>>>> ecd09d0435e8906b405bb15c64a0c31d95e806ad
 N: Peter Partin
 E: peter DOT martin AT tripleplay DASH servies DOT com
 D: ATSC, MRTG, PID remap
@@ -50,3 +56,11 @@ N: Jean-Paul Saman
 E: jpsaman AT videolan DOT org
 C: jpsaman
 D: DVB-S2 bug fixes, syslog support
+<<<<<<< HEAD
+=======
+
+N: Selfnet e.V. (Dirk Braunschweiger, Tillmann Karras, Lukas Kramer, Michael Mueller, Markus Wick)
+E: admin AT selfnet DOT de
+W: www.selfnet.de
+D: Unicable (SCR) and SAP support
+>>>>>>> ecd09d0435e8906b405bb15c64a0c31d95e806ad

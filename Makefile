@@ -17,7 +17,7 @@ CFLAGS += -DVERSION_EXTRA=\"release\"
 endif
 
 ifeq ($(uname_S),Linux)
-LDLIBS += -lrt
+LDLIBS += -lrt -lm
 endif
 ifeq ($(uname_S),Darwin)
 LDLIBS += -liconv
@@ -30,7 +30,7 @@ endif
 
 LDLIBS_DVBLAST += -lpthread -lev
 
-OBJ_DVBLAST = dvblast.o util.o dvb.o udp.o asi.o demux.o output.o en50221.o comm.o mrtg-cnt.o asi-deltacast.o
+OBJ_DVBLAST = dvblast.o util.o dvb.o udp.o asi.o demux.o output.o en50221.o comm.o mrtg-cnt.o asi-deltacast.o sap.o
 OBJ_DVBLASTCTL = util.o dvblastctl.o
 
 ifndef V
@@ -49,7 +49,7 @@ all: dvblast dvblastctl
 
 .PHONY: clean install uninstall dist
 
-%.o: %.c Makefile config.h dvblast.h en50221.h comm.h asi.h mrtg-cnt.h asi-deltacast.h
+%.o: %.c Makefile config.h dvblast.h en50221.h comm.h asi.h mrtg-cnt.h asi-deltacast.h sap.h
 	@echo "CC      $<"
 	$(Q)$(CROSS)$(CC) $(CFLAGS) $(CPPFLAGS) -c $<
 
