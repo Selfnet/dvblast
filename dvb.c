@@ -678,6 +678,7 @@ static int FrontendDoDiseqc(void)
 
             msg_Dbg( NULL, "userband=%d userband_id=%d fe_voltage=%d bis_frequency=%d", i_userband, i_userband_id, fe_voltage, bis_frequency );
             msg_Dbg( NULL, "bis_frequency=%d tuningword=%x", bis_frequency, tuning_word);
+            msg_Dbg( NULL, "satnum=%i", i_satnum);
             msg_Dbg( NULL, "D1=%x D2=%x D3=%x D4=%x", odu_channel_change.msg[1], odu_channel_change.msg[2], odu_channel_change.msg[3], odu_channel_change.msg[4]);
 
             // no offset needed
@@ -691,7 +692,7 @@ static int FrontendDoDiseqc(void)
             /* assume version 1 (EN50494)*/
             /* create struct for channel switch*/
             struct dvb_diseqc_master_cmd odu_channel_change =
-                { {0xe0, 0x00, 0x5a, 0x00, 0x00}, 5};
+                { {0xe0, 0x10, 0x5a, 0x00, 0x00}, 5};
 
             //calculate goal frequency
             int i_goal = bis_frequency + i_userband;
@@ -699,13 +700,14 @@ static int FrontendDoDiseqc(void)
             //calculate tuning_word
             int tuning_word = i_goal / 4000.0 - 350.0 + 0.5;
             
-            // D3
+            // D1
             odu_channel_change.msg[3] |= (i_userband_id & 0x3) << 5;
+            odu_channel_change.msg[3] |= i_satnum << 4;
             odu_channel_change.msg[3] |= fe_voltage << 3;
             odu_channel_change.msg[3] |= !fe_tone << 2;
             odu_channel_change.msg[3] |= tuning_word >> 8;
             
-            // D4
+            // D2
             odu_channel_change.msg[4] |= tuning_word & 0xFF;
 
             // Send Command
@@ -724,6 +726,8 @@ static int FrontendDoDiseqc(void)
                 
             msg_Dbg( NULL, "userband=%d userband_id=%d fe_voltage=%d bis_frequency=%d", i_userband, i_userband_id, fe_voltage, bis_frequency );
             msg_Dbg( NULL, "i_goal=%d tuning_word=%x fe_tone=%d i_real=%d i_offset=%d target_frequency=%d ", i_goal, tuning_word, fe_tone, i_real, i_offset, target_frequency );
+            msg_Dbg( NULL, "i_satnum=%d", i_satnum);
+            msg_Dbg( NULL, "D1=%d D2=%d", odu_channel_change.msg[3], odu_channel_change.msg[4]);
 
             msleep(200000);
         }
