@@ -653,7 +653,7 @@ static int FrontendDoDiseqc(void)
             
             // D1
             odu_channel_change.msg[1] |= i_userband_id << 3;
-            odu_channel_change.msg[1] |= (tuning_word >> 8) & 0x700;
+            odu_channel_change.msg[1] |= (tuning_word >> 8) & 0x7;
 
             // D2
             odu_channel_change.msg[2] |= tuning_word & 0xFF;
