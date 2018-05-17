@@ -652,8 +652,8 @@ static int FrontendDoDiseqc(void)
             int tuning_word = round((double)bis_frequency / 1000) - 100;
             
             // D1
-            odu_channel_change.msg[1] |= (i_userband_id & 0x1f) << 3;
-            odu_channel_change.msg[1] |= (tuning_word & 0x700) >> 8;
+            odu_channel_change.msg[1] |= i_userband_id << 3;
+            odu_channel_change.msg[1] |= (tuning_word >> 8) & 0x700;
 
             // D2
             odu_channel_change.msg[2] |= tuning_word & 0xFF;
