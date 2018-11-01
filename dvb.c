@@ -53,6 +53,7 @@
 #if DVBAPI_VERSION < 508
   #define DTV_STREAM_ID        42
   #define FE_CAN_MULTISTREAM   0x4000000
+  #define FE_CAN_TURBO_FEC     0x8000000
 #endif
 
 #define MAX_DELIVERY_SYSTEMS 20
@@ -472,44 +473,69 @@ static int FrontendDoDiseqc(void)
 
     fe_tone = b_tone ? SEC_TONE_ON : SEC_TONE_OFF;
 
-    /* Automatic mode. */
-    if ( i_frequency >= 950000 && i_frequency <= 2150000 )
+    if ( strcmp( psz_lnb_type, "universal" ) == 0 )
     {
-        msg_Dbg( NULL, "frequency %d is in IF-band", i_frequency );
-        bis_frequency = i_frequency;
+        /* Automatic mode. */
+        if ( i_frequency >= 950000 && i_frequency <= 2150000 )
+        {
+            msg_Dbg( NULL, "frequency %d is in IF-band", i_frequency );
+            bis_frequency = i_frequency;
+        }
+        else if ( i_frequency >= 2500000 && i_frequency <= 2700000 )
+        {
+            msg_Dbg( NULL, "frequency %d is in S-band", i_frequency );
+            bis_frequency = 3650000 - i_frequency;
+        }
+        else if ( i_frequency >= 3400000 && i_frequency <= 4200000 )
+        {
+            msg_Dbg( NULL, "frequency %d is in C-band (lower)", i_frequency );
+            bis_frequency = 5150000 - i_frequency;
+        }
+        else if ( i_frequency >= 4500000 && i_frequency <= 4800000 )
+        {
+            msg_Dbg( NULL, "frequency %d is in C-band (higher)", i_frequency );
+            bis_frequency = 5950000 - i_frequency;
+        }
+        else if ( i_frequency >= 10700000 && i_frequency < 11700000 )
+        {
+            msg_Dbg( NULL, "frequency %d is in Ku-band (lower)",
+                     i_frequency );
+            bis_frequency = i_frequency - 9750000;
+        }
+        else if ( i_frequency >= 11700000 && i_frequency <= 13250000 )
+        {
+            msg_Dbg( NULL, "frequency %d is in Ku-band (higher)",
+                     i_frequency );
+            bis_frequency = i_frequency - 10600000;
+            fe_tone = SEC_TONE_ON;
+        }
+        else
+        {
+            msg_Err( NULL, "frequency %d is out of any known band",
+                     i_frequency );
+            exit(1);
+        }
     }
-    else if ( i_frequency >= 2500000 && i_frequency <= 2700000 )
+    else if ( strcmp( psz_lnb_type, "old-sky" ) == 0 )
     {
-        msg_Dbg( NULL, "frequency %d is in S-band", i_frequency );
-        bis_frequency = 3650000 - i_frequency;
-    }
-    else if ( i_frequency >= 3400000 && i_frequency <= 4200000 )
-    {
-        msg_Dbg( NULL, "frequency %d is in C-band (lower)", i_frequency );
-        bis_frequency = 5150000 - i_frequency;
-    }
-    else if ( i_frequency >= 4500000 && i_frequency <= 4800000 )
-    {
-        msg_Dbg( NULL, "frequency %d is in C-band (higher)", i_frequency );
-        bis_frequency = 5950000 - i_frequency;
-    }
-    else if ( i_frequency >= 10700000 && i_frequency < 11700000 )
-    {
-        msg_Dbg( NULL, "frequency %d is in Ku-band (lower)",
-                 i_frequency );
-        bis_frequency = i_frequency - 9750000;
-    }
-    else if ( i_frequency >= 11700000 && i_frequency <= 13250000 )
-    {
-        msg_Dbg( NULL, "frequency %d is in Ku-band (higher)",
-                 i_frequency );
-        bis_frequency = i_frequency - 10600000;
-        fe_tone = SEC_TONE_ON;
+         if ( i_frequency >= 11700000 && i_frequency <= 13250000 )
+        {
+            msg_Dbg( NULL, "frequency %d is in Ku-band (higher)",
+                     i_frequency );
+            bis_frequency = i_frequency - 11300000;
+            fe_tone = SEC_TONE_ON;
+        }
+        else
+        {
+            msg_Err( NULL, "frequency %d is out of any known band",
+                     i_frequency );
+            exit(1);
+        }
     }
     else
     {
-        msg_Err( NULL, "frequency %d is out of any known band",
-                 i_frequency );
+        msg_Err( NULL, "lnb-type '%s' is not known. Valid type: universal old-sky",
+                 psz_lnb_type );
         exit(1);
     }
 
@@ -751,8 +777,8 @@ static int FrontendDoDiseqc(void)
 
     msleep(100000); /* ... */
 
-    msg_Dbg( NULL, "configuring LNB to v=%d p=%d satnum=%x uncommitted=%x",
-             i_voltage, b_tone, i_satnum, i_uncommitted );
+    msg_Dbg( NULL, "configuring LNB to v=%d p=%d satnum=%x uncommitted=%x lnb-type=%s bis_frequency=%d",
+             i_voltage, b_tone, i_satnum, i_uncommitted, psz_lnb_type, bis_frequency );
     return bis_frequency;
 }
 
@@ -952,6 +978,7 @@ static void FrontendInfo( struct dvb_frontend_info *info, uint32_t version,
     FRONTEND_INFO( info->caps, FE_CAN_2G_MODULATION, "2G_MODULATION" )
 #endif
     FRONTEND_INFO( info->caps, FE_CAN_MULTISTREAM, "MULTISTREAM" )
+    FRONTEND_INFO( info->caps, FE_CAN_TURBO_FEC, "TURBO_FEC" )
     FRONTEND_INFO( info->caps, FE_NEEDS_BENDING, "NEEDS_BENDING" )
     FRONTEND_INFO( info->caps, FE_CAN_RECOVER, "FE_CAN_RECOVER" )
     FRONTEND_INFO( info->caps, FE_CAN_MUTE_TS, "FE_CAN_MUTE_TS" )
@@ -1034,6 +1061,12 @@ static struct dtv_properties dvbs_cmdseq = {
     .props = dvbs_cmdargs
 };
 
+#define IDX_DVBS2_PILOT     6
+#define IDX_DVBS2_ROLLOFF   7
+#define IDX_DVBS2_STREAM_ID 8
+
+/* Commands 0..5 are the same as dvbs_cmdargs */
+/* Commands 6..8 are special for DVB-S2 */
 static struct dtv_property dvbs2_cmdargs[] = {
     { .cmd = DTV_DELIVERY_SYSTEM, .u.data = SYS_DVBS2 },
     { .cmd = DTV_FREQUENCY,       .u.data = 0 },
@@ -1041,9 +1074,9 @@ static struct dtv_property dvbs2_cmdargs[] = {
     { .cmd = DTV_INVERSION,       .u.data = INVERSION_AUTO },
     { .cmd = DTV_SYMBOL_RATE,     .u.data = 27500000 },
     { .cmd = DTV_INNER_FEC,       .u.data = FEC_AUTO },
-    { .cmd = DTV_PILOT,           .u.data = PILOT_AUTO },
-    { .cmd = DTV_ROLLOFF,         .u.data = ROLLOFF_AUTO },
-    { .cmd = DTV_STREAM_ID,       .u.data = 0 },
+    { .cmd = DTV_PILOT,           .u.data = PILOT_AUTO },   /* idx: 6 */
+    { .cmd = DTV_ROLLOFF,         .u.data = ROLLOFF_AUTO }, /* idx: 7 */
+    { .cmd = DTV_STREAM_ID,       .u.data = 0 },            /* idx: 8 */
     { .cmd = DTV_TUNE },
 };
 static struct dtv_properties dvbs2_cmdseq = {
@@ -1154,10 +1187,8 @@ static struct dtv_properties isdbt_cmdseq = {
 #define FEC_INNER 5
 #define FEC_LP 6
 #define GUARD 7
-#define PILOT 7
 #define TRANSMISSION 8
-#define ROLLOFF 8
-#define MIS 9
+
 #define HIERARCHY 9
 #define PLP_ID 10
 
@@ -1419,9 +1450,9 @@ static void FrontendSet( bool b_init )
         {
             p = &dvbs2_cmdseq;
             p->props[MODULATION].u.data = GetModulation();
-            p->props[PILOT].u.data = GetPilot();
-            p->props[ROLLOFF].u.data = GetRollOff();
-            p->props[MIS].u.data = i_mis;
+            p->props[IDX_DVBS2_PILOT].u.data = GetPilot();
+            p->props[IDX_DVBS2_ROLLOFF].u.data = GetRollOff();
+            p->props[IDX_DVBS2_STREAM_ID].u.data = i_mis;
         }
         else
             p = &dvbs_cmdseq;
@@ -1432,10 +1463,10 @@ static void FrontendSet( bool b_init )
         msg_Dbg(NULL, "Freq = %d, ifreq=%d", p->props[FREQUENCY].u.data,i_frequency);
         p->props[FREQUENCY].u.data = FrontendDoDiseqc();
 
-        msg_Dbg( NULL, "tuning DVB-S frontend to f=%d srate=%d inversion=%d fec=%d rolloff=%d modulation=%s pilot=%d mis=%d",
+        msg_Dbg( NULL, "tuning DVB-S frontend to f=%d srate=%d inversion=%d fec=%d rolloff=%d modulation=%s pilot=%d mis=%d /pls-mode: %s (%d) pls-code: %d is-id: %d /",
                  i_frequency, i_srate, i_inversion, i_fec, i_rolloff,
                  psz_modulation == NULL ? "legacy" : psz_modulation, i_pilot,
-                 i_mis );
+                 i_mis, psz_mis_pls_mode, i_mis_pls_mode, i_mis_pls_code, i_mis_is_id );
         break;
 
     case SYS_ATSC:
